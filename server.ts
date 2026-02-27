@@ -475,7 +475,8 @@ async function startServer() {
       score, 
       total: totalPoints, 
       manualReviewNeeded: !!manualReviewNeeded,
-      showAnswers: !!test.show_answers
+      showAnswers: !!test.show_answers,
+      gradingEnabled: !!test.grading_enabled
     });
   });
 

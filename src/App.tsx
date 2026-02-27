@@ -101,7 +101,7 @@ export default function App() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentAnswers, setCurrentAnswers] = useState<Answer[]>([]);
   const [timeLeft, setTimeLeft] = useState(300);
-  const [score, setScore] = useState<{ score: number; total: number; manualReviewNeeded: boolean; showAnswers: boolean } | null>(null);
+  const [score, setScore] = useState<{ score: number; total: number; manualReviewNeeded: boolean; showAnswers: boolean; gradingEnabled?: boolean } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [tabSwitchCount, setTabSwitchCount] = useState(0);
   const [attemptedIds, setAttemptedIds] = useState<number[]>([]);
@@ -522,7 +522,8 @@ export default function App() {
           score: data.score, 
           total: data.total, 
           manualReviewNeeded: data.manualReviewNeeded,
-          showAnswers: data.showAnswers
+          showAnswers: data.showAnswers,
+          gradingEnabled: data.gradingEnabled
         });
         setAttemptedIds(prev => [...prev, selectedTest.id]);
         setView('result');
@@ -1929,21 +1930,29 @@ export default function App() {
               <h2 className="text-4xl font-serif font-medium mb-2">Submission Received</h2>
               <p className="text-black/50 mb-8">{selectedTest?.name}</p>
               
-              <div className="bg-black/5 rounded-3xl p-8 mb-8">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-black/30 mb-2">Assessment Score</p>
-                <div className="text-6xl font-serif font-medium">
-                  {score.score}<span className="text-2xl text-black/20 mx-2">/</span>{score.total}
+              {score.gradingEnabled ? (
+                <div className="bg-black/5 rounded-3xl p-8 mb-8">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-black/30 mb-2">Assessment Score</p>
+                  <div className="text-6xl font-serif font-medium">
+                    {score.score}<span className="text-2xl text-black/20 mx-2">/</span>{score.total}
+                  </div>
+                  <div className="mt-4 h-2 bg-black/10 rounded-full overflow-hidden">
+                    <motion.div 
+                      initial={{ width: 0 }}
+                      animate={{ width: `${(score.score / score.total) * 100}%` }}
+                      className="h-full bg-amber-500"
+                    />
+                  </div>
                 </div>
-                <div className="mt-4 h-2 bg-black/10 rounded-full overflow-hidden">
-                  <motion.div 
-                    initial={{ width: 0 }}
-                    animate={{ width: `${(score.score / score.total) * 100}%` }}
-                    className="h-full bg-amber-500"
-                  />
+              ) : (
+                <div className="bg-black/5 rounded-3xl p-8 mb-8">
+                  <p className="text-sm text-black/60">
+                    Your assessment has been submitted successfully. The results will be shared with you after manual review by the recruitment team.
+                  </p>
                 </div>
-              </div>
+              )}
 
-              {score.manualReviewNeeded && (
+              {score.gradingEnabled && score.manualReviewNeeded && (
                 <div className="mb-8 p-4 bg-amber-50 border border-amber-100 rounded-2xl flex items-center gap-3 text-amber-800 text-sm">
                   <AlertTriangle className="w-5 h-5 shrink-0" />
                   Subjective answers are pending manual review.
