@@ -21,7 +21,8 @@ import {
   AlignLeft,
   Type as TypeIcon,
   Layers,
-  Check
+  Check,
+  X
 } from 'lucide-react';
 
 // Types
@@ -79,6 +80,7 @@ interface Candidate {
   full_name: string;
   email: string;
   status: string;
+  tests_taken: number;
 }
 
 export default function App() {
@@ -88,13 +90,13 @@ export default function App() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [userStatus, setUserStatus] = useState('');
+  const [userId, setUserId] = useState<number | null>(null);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [jobs, setJobs] = useState<Job[]>([]);
   const [tests, setTests] = useState<Test[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  const [users, setUsers] = useState<any[]>([]);
   const [selectedTest, setSelectedTest] = useState<Test | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentAnswers, setCurrentAnswers] = useState<Answer[]>([]);
@@ -104,11 +106,25 @@ export default function App() {
   const [tabSwitchCount, setTabSwitchCount] = useState(0);
   const [attemptedIds, setAttemptedIds] = useState<number[]>([]);
   const [allResults, setAllResults] = useState<Result[]>([]);
+  const [selectedCandidateResults, setSelectedCandidateResults] = useState<Result[]>([]);
+  const [selectedResultDetail, setSelectedResultDetail] = useState<any | null>(null);
+  const [isEditingTest, setIsEditingTest] = useState<number | null>(null);
+  
+  // Admin User Management State
+  const [adminUserForm, setAdminUserForm] = useState({ username: '', password: '', full_name: '', email: '', role: 'candidate' });
+  const [adminPasswordForm, setAdminPasswordForm] = useState({ username: '', password: '' });
+  const [showUserManagement, setShowUserManagement] = useState(false);
+  const [showProfileSettings, setShowProfileSettings] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [bulkImportJson, setBulkImportJson] = useState('');
+  const [showBulkImport, setShowBulkImport] = useState(false);
+  const [assignments, setAssignments] = useState<{[key: number]: number[]}>({});
+  const [assigningUserId, setAssigningUserId] = useState<number | null>(null);
   
   // Admin Create Test State
   const [newTestName, setNewTestName] = useState('');
   const [newTestDesc, setNewTestDesc] = useState('');
-  const [newTestJobId, setNewTestJobId] = useState<number | ''>('');
   const [newTestConfig, setNewTestConfig] = useState({
     grading_enabled: true,
     timing_enabled: true,
@@ -156,6 +172,16 @@ export default function App() {
       setAllResults(data);
     } catch (err) {
       setError('Failed to load results');
+    }
+  };
+
+  const fetchResultDetail = async (id: number) => {
+    try {
+      const res = await fetch(`/api/results/${id}/details`);
+      const data = await res.json();
+      setSelectedResultDetail(data);
+    } catch (err) {
+      console.error('Failed to fetch result detail:', err);
     }
   };
 
@@ -207,17 +233,15 @@ export default function App() {
       });
       const data = await res.json();
       if (res.ok) {
+        setUserId(data.id);
         setUserRole(data.role);
         setFullName(data.full_name);
         setUserStatus(data.status);
         setAttemptedIds(data.attempted_tests);
         if (data.role === 'admin') {
-          fetchResults();
-          fetchCandidates();
-          fetchJobs();
           setView('admin');
         } else {
-          fetchJobs();
+          fetchTests(data.id);
           setView('dashboard');
         }
       } else {
@@ -228,13 +252,14 @@ export default function App() {
     }
   };
 
-  const fetchJobs = async () => {
+  const fetchTests = async (uid?: number) => {
     try {
-      const res = await fetch('/api/jobs');
+      const url = uid ? `/api/tests?user_id=${uid}` : '/api/tests';
+      const res = await fetch(url);
       const data = await res.json();
-      setJobs(data);
+      setTests(data);
     } catch (err) {
-      setError('Failed to load jobs');
+      setError('Failed to load tests');
     }
   };
 
@@ -248,13 +273,52 @@ export default function App() {
     }
   };
 
-  const fetchTestsForJob = async (jobId: number) => {
+  const fetchUsers = async () => {
     try {
-      const res = await fetch(`/api/jobs/${jobId}/tests`);
+      const res = await fetch('/api/admin/users');
       const data = await res.json();
-      setTests(data);
+      setUsers(data);
     } catch (err) {
-      setError('Failed to load tests');
+      console.error('Failed to fetch users:', err);
+    }
+  };
+
+  const fetchUserAssignments = async (uid: number) => {
+    try {
+      const res = await fetch(`/api/assignments/${uid}`);
+      const data = await res.json();
+      setAssignments(prev => ({ ...prev, [uid]: data }));
+    } catch (err) {
+      console.error('Failed to fetch assignments:', err);
+    }
+  };
+
+  const toggleAssignment = async (uid: number, tid: number) => {
+    const isAssigned = assignments[uid]?.includes(tid);
+    const method = isAssigned ? 'DELETE' : 'POST';
+    const url = isAssigned ? `/api/assignments/${uid}/${tid}` : '/api/assignments';
+    
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: isAssigned ? undefined : JSON.stringify({ user_id: uid, test_id: tid }),
+      });
+      if (res.ok) {
+        fetchUserAssignments(uid);
+      }
+    } catch (err) {
+      alert('Assignment update failed');
+    }
+  };
+
+  const fetchCandidateResults = async (username: string) => {
+    try {
+      const res = await fetch(`/api/candidates/${username}/results`);
+      const data = await res.json();
+      setSelectedCandidateResults(data);
+    } catch (err) {
+      console.error('Failed to fetch candidate results:', err);
     }
   };
 
@@ -270,6 +334,158 @@ export default function App() {
       }
     } catch (err) {
       alert('Failed to update status');
+    }
+  };
+
+  const handleCreateTest = async () => {
+    if (!newTestName) return;
+    try {
+      const url = isEditingTest ? `/api/tests/${isEditingTest}` : '/api/tests';
+      const method = isEditingTest ? 'PUT' : 'POST';
+      
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newTestName,
+          description: newTestDesc,
+          questions: newQuestions,
+          adminUsername: username,
+          ...newTestConfig
+        })
+      });
+      if (res.ok) {
+        setNewTestName('');
+        setNewTestDesc('');
+        setNewQuestions([{ question: '', type: 'MCQ', options: ['', '', '', ''], answer: '', points: 1 }]);
+        setIsEditingTest(null);
+        fetchTests();
+      }
+    } catch (err) {
+      console.error('Failed to save test:', err);
+    }
+  };
+
+  const handleEditTest = async (test: Test) => {
+    try {
+      const res = await fetch(`/api/tests/${test.id}`);
+      const data = await res.json();
+      setNewTestName(data.name);
+      setNewTestDesc(data.description);
+      setNewQuestions(data.questions);
+      setNewTestConfig({
+        grading_enabled: data.grading_enabled === 1,
+        timing_enabled: data.timing_enabled === 1,
+        randomization_enabled: data.randomization_enabled === 1,
+        anti_cheat_enabled: data.anti_cheat_enabled === 1,
+        attempt_limit: data.attempt_limit,
+        show_answers: data.show_answers === 1,
+        total_time: data.total_time,
+        per_question_time: data.per_question_time
+      });
+      setIsEditingTest(test.id);
+    } catch (err) {
+      console.error('Failed to fetch test for editing:', err);
+    }
+  };
+
+  const handleAdminCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(adminUserForm),
+      });
+      if (res.ok) {
+        setAdminUserForm({ username: '', password: '', full_name: '', email: '', role: 'candidate' });
+        fetchCandidates();
+        fetchUsers();
+        alert('User created successfully');
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to create user');
+      }
+    } catch (err) {
+      alert('Connection error');
+    }
+  };
+
+  const handleAdminChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch(`/api/admin/users/${adminPasswordForm.username}/password`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPasswordForm.password }),
+      });
+      if (res.ok) {
+        setAdminPasswordForm({ username: '', password: '' });
+        alert('Password updated successfully');
+      } else {
+        alert('Failed to update password');
+      }
+    } catch (err) {
+      alert('Connection error');
+    }
+  };
+
+  const handleAdminDeleteUser = async (username: string) => {
+    if (!confirm(`Are you sure you want to delete user ${username}? This will also delete all their results.`)) return;
+    try {
+      const res = await fetch(`/api/admin/users/${username}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        fetchCandidates();
+        fetchUsers();
+        alert('User deleted successfully');
+      } else {
+        alert('Failed to delete user');
+      }
+    } catch (err) {
+      alert('Connection error');
+    }
+  };
+
+  const handleSelfChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      alert('Passwords do not match');
+      return;
+    }
+    try {
+      const res = await fetch(`/api/admin/users/${username}/password`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: newPassword }),
+      });
+      if (res.ok) {
+        setNewPassword('');
+        setConfirmPassword('');
+        setShowProfileSettings(false);
+        alert('Password updated successfully');
+      } else {
+        alert('Failed to update password');
+      }
+    } catch (err) {
+      alert('Connection error');
+    }
+  };
+
+  const handleBulkImport = () => {
+    try {
+      const imported = JSON.parse(bulkImportJson);
+      if (Array.isArray(imported)) {
+        setNewQuestions([...newQuestions, ...imported]);
+        setBulkImportJson('');
+        setShowBulkImport(false);
+        alert(`Imported ${imported.length} questions successfully!`);
+      } else {
+        alert('Invalid format. Please provide a JSON array of questions.');
+      }
+    } catch (err) {
+      alert('Invalid JSON format.');
     }
   };
 
@@ -320,32 +536,16 @@ export default function App() {
     }
   }, [username, currentAnswers, isSubmitting, selectedTest, tabSwitchCount]);
 
-  const handleCreateTest = async () => {
-    if (!newTestName || !newTestDesc || !newTestJobId) return;
-    try {
-      const res = await fetch('/api/tests', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          name: newTestName, 
-          description: newTestDesc, 
-          questions: newQuestions,
-          adminUsername: username,
-          jobId: newTestJobId,
-          ...newTestConfig
-        }),
-      });
-      if (res.ok) {
-        setNewTestName('');
-        setNewTestDesc('');
-        setNewTestJobId('');
-        setNewQuestions([{ question: '', type: 'MCQ', options: ['', '', '', ''], answer: '', points: 1 }]);
-        alert('Test created successfully!');
-      }
-    } catch (err) {
-      alert('Failed to create test');
+  useEffect(() => {
+    if (view === 'admin') {
+      fetchTests();
+      fetchCandidates();
+      fetchUsers();
+      fetchResults();
+    } else if (view === 'dashboard' && userId) {
+      fetchTests(userId);
     }
-  };
+  }, [view, userId]);
 
   useEffect(() => {
     if (view === 'test' && timeLeft > 0) {
@@ -355,6 +555,48 @@ export default function App() {
       handleSubmit();
     }
   }, [view, timeLeft, handleSubmit]);
+
+  const enterFullScreen = () => {
+    const elem = document.documentElement;
+    if (elem.requestFullscreen) {
+      elem.requestFullscreen();
+    } else if ((elem as any).webkitRequestFullscreen) {
+      (elem as any).webkitRequestFullscreen();
+    } else if ((elem as any).msRequestFullscreen) {
+      (elem as any).msRequestFullscreen();
+    }
+  };
+
+  const exitFullScreen = () => {
+    if (document.exitFullscreen) {
+      document.exitFullscreen();
+    } else if ((document as any).webkitExitFullscreen) {
+      (document as any).webkitExitFullscreen();
+    } else if ((document as any).msExitFullscreen) {
+      (document as any).msExitFullscreen();
+    }
+  };
+
+  useEffect(() => {
+    const handleFullScreenChange = () => {
+      if (!document.fullscreenElement && view === 'test' && selectedTest?.anti_cheat_enabled) {
+        alert("SECURITY ALERT: Fullscreen mode exited. This has been logged.");
+        setTabSwitchCount(prev => prev + 1);
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullScreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullScreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullScreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullScreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullScreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullScreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullScreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullScreenChange);
+    };
+  }, [view, selectedTest]);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -577,84 +819,107 @@ export default function App() {
                   <p className="text-[10px] uppercase tracking-widest text-black/30">Application Status</p>
                   <p className={`text-sm font-bold ${userStatus === 'Hired' ? 'text-emerald-600' : 'text-amber-600'}`}>{userStatus}</p>
                 </div>
+                <button onClick={() => setShowProfileSettings(true)} className="p-3 bg-black/5 hover:bg-black/10 rounded-2xl transition-colors">
+                  <Settings className="w-5 h-5 text-black/40" />
+                </button>
                 <button onClick={() => setView('login')} className="p-3 bg-black/5 hover:bg-black/10 rounded-2xl transition-colors">
                   <LogOut className="w-5 h-5 text-black/40" />
                 </button>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              <div className="lg:col-span-2 space-y-6">
-                <h3 className="text-xl font-serif font-medium flex items-center gap-2">
-                  <ChevronRight className="w-5 h-5 text-amber-500" />
-                  Available Opportunities
-                </h3>
-                <div className="grid grid-cols-1 gap-4">
-                  {jobs.map(job => (
+            {showProfileSettings && (
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="bg-white p-8 rounded-[32px] border border-black/5 shadow-xl mb-8 max-w-md mx-auto"
+              >
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-xl font-serif font-medium">Profile Settings</h3>
+                  <button onClick={() => setShowProfileSettings(false)} className="text-black/30 hover:text-black">Close</button>
+                </div>
+                <form onSubmit={handleSelfChangePassword} className="space-y-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-black/30">New Password</label>
+                    <input 
+                      type="password" 
+                      value={newPassword}
+                      onChange={e => setNewPassword(e.target.value)}
+                      className="w-full bg-black/5 border-none rounded-xl py-3 px-4 outline-none text-sm"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-black/30">Confirm Password</label>
+                    <input 
+                      type="password" 
+                      value={confirmPassword}
+                      onChange={e => setConfirmPassword(e.target.value)}
+                      className="w-full bg-black/5 border-none rounded-xl py-3 px-4 outline-none text-sm"
+                      required
+                    />
+                  </div>
+                  <button type="submit" className="w-full bg-[#0F172A] text-white py-3 rounded-xl font-bold hover:bg-[#1E293B] transition-all">
+                    Update Password
+                  </button>
+                </form>
+              </motion.div>
+            )}
+
+            <div className="space-y-8">
+              <h3 className="text-2xl font-serif font-medium flex items-center gap-3">
+                <Layers className="w-6 h-6 text-amber-500" />
+                Available Assessments
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {tests.map(test => {
+                  const attempts = attemptedIds.filter(id => id === test.id).length;
+                  const isCompleted = attempts >= test.attempt_limit;
+                  return (
                     <motion.div 
-                      key={job.id}
-                      whileHover={{ x: 4 }}
-                      className="bg-white p-6 rounded-3xl border border-black/5 shadow-sm flex justify-between items-center group cursor-pointer"
-                      onClick={() => {
-                        setSelectedJob(job);
-                        fetchTestsForJob(job.id);
-                      }}
+                      key={test.id}
+                      whileHover={{ y: -4 }}
+                      className={`bg-white p-8 rounded-[32px] border border-black/5 shadow-sm flex flex-col justify-between ${isCompleted ? 'opacity-60' : ''}`}
                     >
                       <div>
-                        <div className="flex items-center gap-3 mb-1">
-                          <span className="text-[10px] font-bold uppercase tracking-widest bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md">
-                            {job.department}
-                          </span>
-                          <h4 className="text-lg font-medium">{job.title}</h4>
+                        <div className="flex justify-between items-start mb-4">
+                          <div className="w-10 h-10 bg-black/5 rounded-xl flex items-center justify-center text-amber-600">
+                            <CheckSquare className="w-5 h-5" />
+                          </div>
+                          {isCompleted && (
+                            <span className="text-[10px] font-bold uppercase tracking-widest bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full">Completed</span>
+                          )}
                         </div>
-                        <p className="text-sm text-black/40 line-clamp-1">{job.description}</p>
+                        <h4 className="text-xl font-medium mb-2">{test.name}</h4>
+                        <p className="text-sm text-black/40 mb-6 line-clamp-2">{test.description}</p>
+                        
+                        <div className="flex items-center gap-4 mb-8">
+                          <div className="flex items-center gap-1.5 text-[10px] font-bold text-black/30 uppercase">
+                            <Timer className="w-3 h-3" />
+                            {formatTime(test.total_time)}
+                          </div>
+                          <div className="flex items-center gap-1.5 text-[10px] font-bold text-black/30 uppercase">
+                            <ShieldAlert className="w-3 h-3" />
+                            {test.anti_cheat_enabled ? 'Proctored' : 'Standard'}
+                          </div>
+                        </div>
                       </div>
-                      <div className="w-10 h-10 bg-black/5 rounded-full flex items-center justify-center group-hover:bg-amber-500 group-hover:text-white transition-all">
-                        <ChevronRight className="w-5 h-5" />
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              </div>
 
-              <div className="space-y-6">
-                <h3 className="text-xl font-serif font-medium flex items-center gap-2">
-                  <Timer className="w-5 h-5 text-amber-500" />
-                  Required Assessments
-                </h3>
-                {selectedJob ? (
-                  <div className="space-y-4">
-                    {tests.length > 0 ? tests.map(test => {
-                      const isAttempted = attemptedIds.includes(test.id);
-                      return (
-                        <div key={test.id} className={`bg-white p-6 rounded-3xl border border-black/5 shadow-sm ${isAttempted ? 'opacity-50' : ''}`}>
-                          <h4 className="font-medium mb-2">{test.name}</h4>
-                          <p className="text-xs text-black/40 mb-4">{test.description}</p>
-                          <button 
-                            onClick={() => !isAttempted && startTest(test)}
-                            disabled={isAttempted}
-                            className={`w-full py-3 rounded-2xl text-sm font-medium transition-all ${
-                              isAttempted 
-                              ? 'bg-black/5 text-black/30' 
-                              : 'bg-[#0F172A] text-white hover:bg-[#1E293B]'
-                            }`}
-                          >
-                            {isAttempted ? 'Completed' : 'Start Test'}
-                          </button>
-                        </div>
-                      );
-                    }) : (
-                      <div className="bg-white p-8 rounded-3xl border border-dashed border-black/10 text-center">
-                        <p className="text-sm text-black/30 italic">No tests assigned for this role yet.</p>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="bg-white/50 p-12 rounded-[32px] border border-dashed border-black/10 flex flex-col items-center justify-center text-center">
-                    <MousePointer2 className="w-8 h-8 text-black/10 mb-4" />
-                    <p className="text-sm text-black/30">Select a job to view assessments</p>
-                  </div>
-                )}
+                      <button 
+                        onClick={() => !isCompleted && startTest(test)}
+                        disabled={isCompleted}
+                        className={`w-full py-4 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 ${
+                          isCompleted 
+                          ? 'bg-black/5 text-black/20 cursor-not-allowed' 
+                          : 'bg-[#0F172A] text-white hover:bg-[#1E293B] shadow-lg hover:shadow-xl'
+                        }`}
+                      >
+                        {isCompleted ? 'Test Completed' : 'Start Assessment'}
+                        {!isCompleted && <ChevronRight className="w-4 h-4" />}
+                      </button>
+                    </motion.div>
+                  );
+                })}
               </div>
             </div>
           </motion.div>
@@ -679,6 +944,19 @@ export default function App() {
               </div>
               <div className="flex gap-4">
                 <button 
+                  onClick={() => setShowProfileSettings(!showProfileSettings)}
+                  className={`p-4 rounded-2xl transition-all ${showProfileSettings ? 'bg-amber-500 text-[#0F172A]' : 'bg-white/10 hover:bg-white/20 text-white'}`}
+                >
+                  <Settings className="w-6 h-6" />
+                </button>
+                <button 
+                  onClick={() => setShowUserManagement(!showUserManagement)}
+                  className={`flex items-center gap-2 px-6 py-3 rounded-2xl transition-all font-medium ${showUserManagement ? 'bg-amber-500 text-[#0F172A]' : 'bg-white/10 hover:bg-white/20 text-white'}`}
+                >
+                  <User className="w-5 h-5" />
+                  User Management
+                </button>
+                <button 
                   onClick={exportResults}
                   className="flex items-center gap-2 px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-2xl transition-all font-medium"
                 >
@@ -692,6 +970,158 @@ export default function App() {
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
+              {showProfileSettings && (
+                <motion.div 
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  className="col-span-full bg-white p-8 rounded-[40px] border border-black/5 shadow-sm mb-8 max-w-md mx-auto"
+                >
+                  <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-xl font-serif font-medium">Admin Profile Settings</h3>
+                    <button onClick={() => setShowProfileSettings(false)} className="text-black/30 hover:text-black">Close</button>
+                  </div>
+                  <form onSubmit={handleSelfChangePassword} className="space-y-4">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-black/30">New Password</label>
+                      <input 
+                        type="password" 
+                        value={newPassword}
+                        onChange={e => setNewPassword(e.target.value)}
+                        className="w-full bg-black/5 border-none rounded-xl py-3 px-4 outline-none text-sm"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-black/30">Confirm Password</label>
+                      <input 
+                        type="password" 
+                        value={confirmPassword}
+                        onChange={e => setConfirmPassword(e.target.value)}
+                        className="w-full bg-black/5 border-none rounded-xl py-3 px-4 outline-none text-sm"
+                        required
+                      />
+                    </div>
+                    <button type="submit" className="w-full bg-[#0F172A] text-white py-3 rounded-xl font-bold hover:bg-[#1E293B] transition-all">
+                      Update Admin Password
+                    </button>
+                  </form>
+                </motion.div>
+              )}
+
+              {showUserManagement && (
+                <motion.div 
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  className="col-span-full bg-white p-8 rounded-[40px] border border-black/5 shadow-sm mb-8"
+                >
+                  <div className="flex justify-between items-center mb-8">
+                    <h3 className="text-2xl font-serif font-medium flex items-center gap-3">
+                      <User className="w-6 h-6 text-amber-500" />
+                      User & Access Management
+                    </h3>
+                    <button onClick={() => setShowUserManagement(false)} className="text-black/30 hover:text-black">Close</button>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+                    {/* Create User Form */}
+                    <div className="space-y-6">
+                      <h4 className="text-xs font-bold uppercase tracking-widest text-black/40">Create New User</h4>
+                      <form onSubmit={handleAdminCreateUser} className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <input 
+                            type="text" 
+                            placeholder="Username"
+                            value={adminUserForm.username}
+                            onChange={e => setAdminUserForm({...adminUserForm, username: e.target.value})}
+                            className="w-full bg-black/5 border-none rounded-2xl py-4 px-5 outline-none text-sm"
+                            required
+                          />
+                          <input 
+                            type="password" 
+                            placeholder="Password"
+                            value={adminUserForm.password}
+                            onChange={e => setAdminUserForm({...adminUserForm, password: e.target.value})}
+                            className="w-full bg-black/5 border-none rounded-2xl py-4 px-5 outline-none text-sm"
+                            required
+                          />
+                        </div>
+                        <input 
+                          type="text" 
+                          placeholder="Full Name"
+                          value={adminUserForm.full_name}
+                          onChange={e => setAdminUserForm({...adminUserForm, full_name: e.target.value})}
+                          className="w-full bg-black/5 border-none rounded-2xl py-4 px-5 outline-none text-sm"
+                          required
+                        />
+                        <input 
+                          type="email" 
+                          placeholder="Email Address"
+                          value={adminUserForm.email}
+                          onChange={e => setAdminUserForm({...adminUserForm, email: e.target.value})}
+                          className="w-full bg-black/5 border-none rounded-2xl py-4 px-5 outline-none text-sm"
+                          required
+                        />
+                        <select 
+                          value={adminUserForm.role}
+                          onChange={e => setAdminUserForm({...adminUserForm, role: e.target.value})}
+                          className="w-full bg-black/5 border-none rounded-2xl py-4 px-5 outline-none text-sm"
+                        >
+                          <option value="candidate">Candidate</option>
+                          <option value="admin">Administrator</option>
+                        </select>
+                        <button type="submit" className="w-full bg-[#0F172A] text-white py-4 rounded-full font-bold hover:bg-[#1E293B] transition-all">
+                          Create User Account
+                        </button>
+                      </form>
+                    </div>
+
+                    {/* Change Password Form */}
+                    <div className="space-y-6">
+                      <h4 className="text-xs font-bold uppercase tracking-widest text-black/40">Reset User Password</h4>
+                      <form onSubmit={handleAdminChangePassword} className="space-y-4">
+                        <input 
+                          type="text" 
+                          placeholder="Target Username"
+                          value={adminPasswordForm.username}
+                          onChange={e => setAdminPasswordForm({...adminPasswordForm, username: e.target.value})}
+                          className="w-full bg-black/5 border-none rounded-2xl py-4 px-5 outline-none text-sm"
+                          required
+                        />
+                        <input 
+                          type="password" 
+                          placeholder="New Password"
+                          value={adminPasswordForm.password}
+                          onChange={e => setAdminPasswordForm({...adminPasswordForm, password: e.target.value})}
+                          className="w-full bg-black/5 border-none rounded-2xl py-4 px-5 outline-none text-sm"
+                          required
+                        />
+                        <button type="submit" className="w-full bg-amber-500 text-[#0F172A] py-4 rounded-full font-bold hover:bg-amber-600 transition-all">
+                          Update Password
+                        </button>
+                      </form>
+
+                      <div className="pt-8 border-t border-black/5">
+                        <h4 className="text-xs font-bold uppercase tracking-widest text-black/40 mb-4">Quick Actions</h4>
+                        <div className="flex flex-wrap gap-2">
+                          {users.map(u => (
+                            <div key={u.id} className="flex items-center gap-2 bg-black/5 px-3 py-2 rounded-xl text-xs">
+                              <span className="font-medium">{u.username}</span>
+                              <span className="text-[8px] uppercase text-black/30">{u.role}</span>
+                              <button 
+                                onClick={() => handleAdminDeleteUser(u.username)}
+                                className="text-red-500 hover:text-red-700"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
               {/* Left Column: Pipeline & Results */}
               <div className="xl:col-span-2 space-y-8">
                 <div className="bg-white p-8 rounded-[32px] border border-black/5 shadow-sm">
@@ -701,24 +1131,78 @@ export default function App() {
                   </h3>
                   <div className="space-y-4">
                     {candidates.map(cand => (
-                      <div key={cand.id} className="p-4 bg-black/[0.02] rounded-2xl border border-black/5 flex justify-between items-center">
-                        <div>
-                          <p className="font-bold text-sm">{cand.full_name}</p>
-                          <p className="text-[10px] text-black/30">{cand.email}</p>
+                      <div key={cand.id} className="p-4 bg-black/[0.02] rounded-2xl border border-black/5 space-y-3">
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <p className="font-bold text-sm">{cand.full_name}</p>
+                            <p className="text-[10px] text-black/30">{cand.email} • {cand.tests_taken} Tests</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button 
+                              onClick={() => {
+                                setAssigningUserId(cand.id);
+                                fetchUserAssignments(cand.id);
+                              }}
+                              title="Assign Assessments"
+                              className="p-2 bg-white border border-black/5 rounded-lg hover:bg-amber-50 hover:text-amber-600 transition-all"
+                            >
+                              <Plus className="w-4 h-4" />
+                            </button>
+                            <button 
+                              onClick={() => fetchCandidateResults(cand.username)}
+                              className="p-2 bg-white border border-black/5 rounded-lg hover:bg-amber-50 hover:text-amber-600 transition-all"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <select 
+                              value={cand.status}
+                              onChange={(e) => updateCandidateStatus(cand.username, e.target.value)}
+                              className="text-xs bg-white border border-black/10 rounded-lg px-2 py-1 outline-none"
+                            >
+                              <option value="Applied">Applied</option>
+                              <option value="Shortlisted">Shortlisted</option>
+                              <option value="Interviewed">Interviewed</option>
+                              <option value="Hired">Hired</option>
+                              <option value="Rejected">Rejected</option>
+                            </select>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <select 
-                            value={cand.status}
-                            onChange={(e) => updateCandidateStatus(cand.username, e.target.value)}
-                            className="text-xs bg-white border border-black/10 rounded-lg px-2 py-1 outline-none"
+                        {assigningUserId === cand.id && (
+                          <motion.div 
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="mt-4 p-4 bg-white border border-black/5 rounded-2xl space-y-4"
                           >
-                            <option value="Applied">Applied</option>
-                            <option value="Shortlisted">Shortlisted</option>
-                            <option value="Interviewed">Interviewed</option>
-                            <option value="Hired">Hired</option>
-                            <option value="Rejected">Rejected</option>
-                          </select>
-                        </div>
+                            <div className="flex justify-between items-center">
+                              <p className="text-[10px] font-bold text-black/30 uppercase">Assign Assessments:</p>
+                              <button onClick={() => setAssigningUserId(null)} className="text-[10px] text-black/30 hover:text-black">Close</button>
+                            </div>
+                            <div className="grid grid-cols-1 gap-2">
+                              {tests.map(t => (
+                                <label key={t.id} className="flex items-center justify-between p-2 hover:bg-black/5 rounded-xl cursor-pointer">
+                                  <span className="text-xs">{t.name}</span>
+                                  <input 
+                                    type="checkbox" 
+                                    checked={assignments[cand.id]?.includes(t.id)}
+                                    onChange={() => toggleAssignment(cand.id, t.id)}
+                                    className="w-4 h-4 accent-amber-500"
+                                  />
+                                </label>
+                              ))}
+                            </div>
+                          </motion.div>
+                        )}
+                        {selectedCandidateResults.length > 0 && selectedCandidateResults[0].username === cand.username && (
+                          <div className="mt-4 pt-4 border-t border-black/5 space-y-2">
+                            <p className="text-[10px] font-bold text-black/30 uppercase">Test History:</p>
+                            {selectedCandidateResults.map(r => (
+                              <div key={r.id} className="flex justify-between items-center text-[10px] bg-white p-2 rounded-lg border border-black/5">
+                                <span className="font-medium">{r.test_name}</span>
+                                <span className="font-mono font-bold">{r.score}/{r.total}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -764,6 +1248,13 @@ export default function App() {
                             <MessageSquare className="w-3 h-3" />
                             {res.feedback ? 'Feedback Sent' : 'No Feedback'}
                           </div>
+                          <button 
+                            onClick={() => fetchResultDetail(res.id)}
+                            className="ml-auto flex items-center gap-1 text-amber-600 font-bold hover:underline"
+                          >
+                            <Eye className="w-3 h-3" />
+                            VIEW DETAILED REPORT
+                          </button>
                         </div>
 
                         <div className="pt-2">
@@ -781,29 +1272,16 @@ export default function App() {
               </div>
 
               {/* Right Column: Quiz Creator */}
-              <div className="xl:col-span-2">
-                <div className="bg-white p-8 rounded-[40px] border border-black/5 shadow-sm sticky top-8">
+              <div className="xl:col-span-2 space-y-8">
+                <div className="bg-white p-8 rounded-[40px] border border-black/5 shadow-sm">
                   <h3 className="text-2xl font-serif font-medium mb-8 flex items-center gap-3">
                     <Plus className="w-6 h-6 text-amber-500" />
-                    Modular Quiz Creator
+                    {isEditingTest ? 'Edit Assessment' : 'Modular Quiz Creator'}
                   </h3>
                   
                   <div className="space-y-6">
                     {/* Basic Info */}
                     <div className="grid grid-cols-2 gap-4">
-                      <div className="col-span-2">
-                        <label className="text-[10px] font-bold uppercase tracking-widest text-black/30 mb-2 block">Job Association</label>
-                        <select 
-                          value={newTestJobId}
-                          onChange={e => setNewTestJobId(Number(e.target.value))}
-                          className="w-full bg-black/5 border-none rounded-2xl py-4 px-5 outline-none text-sm"
-                        >
-                          <option value="">Select Job Role</option>
-                          {jobs.map(job => (
-                            <option key={job.id} value={job.id}>{job.title} ({job.department})</option>
-                          ))}
-                        </select>
-                      </div>
                       <div className="col-span-2">
                         <label className="text-[10px] font-bold uppercase tracking-widest text-black/30 mb-2 block">Quiz Details</label>
                         <input 
@@ -892,14 +1370,43 @@ export default function App() {
                     <div className="space-y-6">
                       <div className="flex justify-between items-center">
                         <h4 className="text-xs font-bold uppercase tracking-widest text-black/40">Question Bank</h4>
-                        <button 
-                          onClick={() => setNewQuestions([...newQuestions, { question: '', type: 'MCQ', options: ['', '', '', ''], answer: '', points: 1 }])}
-                          className="flex items-center gap-2 text-xs text-amber-600 font-bold hover:bg-amber-50 px-4 py-2 rounded-xl transition-all"
-                        >
-                          <Plus className="w-4 h-4" />
-                          ADD QUESTION
-                        </button>
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => setShowBulkImport(!showBulkImport)}
+                            className="flex items-center gap-2 text-xs text-black/40 font-bold hover:bg-black/5 px-4 py-2 rounded-xl transition-all"
+                          >
+                            <Download className="w-4 h-4" />
+                            BULK IMPORT
+                          </button>
+                          <button 
+                            onClick={() => setNewQuestions([...newQuestions, { question: '', type: 'MCQ', options: ['', '', '', ''], answer: '', points: 1 }])}
+                            className="flex items-center gap-2 text-xs text-amber-600 font-bold hover:bg-amber-50 px-4 py-2 rounded-xl transition-all"
+                          >
+                            <Plus className="w-4 h-4" />
+                            ADD QUESTION
+                          </button>
+                        </div>
                       </div>
+
+                      {showBulkImport && (
+                        <motion.div 
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="p-6 bg-black/[0.02] rounded-[32px] border border-black/5 space-y-4"
+                        >
+                          <p className="text-[10px] text-black/40">Paste a JSON array of questions. Example: <code className="bg-black/5 p-1 rounded">{'[{"question": "...", "type": "MCQ", "options": ["...", "..."], "answer": "...", "points": 1}]'}</code></p>
+                          <textarea 
+                            value={bulkImportJson}
+                            onChange={e => setBulkImportJson(e.target.value)}
+                            placeholder='[{"question": "...", "type": "MCQ", ...}]'
+                            className="w-full h-32 bg-white border border-black/5 rounded-2xl p-4 text-xs font-mono outline-none"
+                          />
+                          <div className="flex justify-end gap-3">
+                            <button onClick={() => setShowBulkImport(false)} className="text-xs text-black/30 font-bold">Cancel</button>
+                            <button onClick={handleBulkImport} className="bg-[#0F172A] text-white px-6 py-2 rounded-full text-xs font-bold">Import Questions</button>
+                          </div>
+                        </motion.div>
+                      )}
 
                       <div className="space-y-6 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
                         {newQuestions.map((q, qIdx) => (
@@ -1076,8 +1583,57 @@ export default function App() {
                       className="w-full bg-[#0F172A] text-white py-5 rounded-full font-bold mt-8 hover:bg-[#1E293B] transition-all shadow-xl flex items-center justify-center gap-3"
                     >
                       <CheckCircle2 className="w-6 h-6 text-amber-500" />
-                      PUBLISH MODULAR ASSESSMENT
+                      {isEditingTest ? 'UPDATE ASSESSMENT' : 'PUBLISH MODULAR ASSESSMENT'}
                     </button>
+                    {isEditingTest && (
+                      <button 
+                        onClick={() => {
+                          setIsEditingTest(null);
+                          setNewTestName('');
+                          setNewTestDesc('');
+                          setNewQuestions([{ question: '', type: 'MCQ', options: ['', '', '', ''], answer: '', points: 1 }]);
+                        }}
+                        className="w-full text-black/40 text-xs font-bold mt-4 hover:text-black transition-colors"
+                      >
+                        CANCEL EDITING
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-white p-8 rounded-[32px] border border-black/5 shadow-sm">
+                  <h3 className="text-xl font-serif font-medium mb-6 flex items-center gap-3">
+                    <Settings className="w-5 h-5 text-amber-500" />
+                    Manage Assessments
+                  </h3>
+                  <div className="space-y-4">
+                    {tests.map(test => (
+                      <div key={test.id} className="p-4 bg-black/[0.02] rounded-2xl border border-black/5 flex justify-between items-center">
+                        <div>
+                          <p className="font-bold text-sm">{test.name}</p>
+                          <p className="text-[10px] text-black/30">{test.description.substring(0, 50)}...</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button 
+                            onClick={() => handleEditTest(test)}
+                            className="p-2 bg-white border border-black/5 rounded-lg hover:bg-amber-50 hover:text-amber-600 transition-all"
+                          >
+                            <Settings className="w-4 h-4" />
+                          </button>
+                          <button 
+                            onClick={async () => {
+                              if (confirm('Are you sure you want to delete this test?')) {
+                                await fetch(`/api/tests/${test.id}`, { method: 'DELETE' });
+                                fetchTests();
+                              }
+                            }}
+                            className="p-2 bg-white border border-black/5 rounded-lg hover:bg-red-50 hover:text-red-600 transition-all"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -1148,7 +1704,10 @@ export default function App() {
                   Cancel
                 </button>
                 <button 
-                  onClick={() => setView('test')}
+                  onClick={() => {
+                    enterFullScreen();
+                    setView('test');
+                  }}
                   className="flex-[2] bg-[#0F172A] hover:bg-[#1E293B] text-white rounded-full py-5 text-lg font-medium transition-all flex items-center justify-center gap-3 shadow-lg"
                 >
                   Confirm & Start
@@ -1342,7 +1901,10 @@ export default function App() {
               )}
               
               <button 
-                onClick={handleSubmit}
+                onClick={() => {
+                  exitFullScreen();
+                  handleSubmit();
+                }}
                 disabled={isSubmitting}
                 className="bg-[#0F172A] hover:bg-[#1E293B] text-white px-16 py-5 rounded-full text-lg font-medium transition-all shadow-xl hover:shadow-2xl disabled:opacity-50 flex items-center gap-3"
               >
@@ -1395,6 +1957,128 @@ export default function App() {
                 Return to Dashboard
               </button>
             </div>
+          </motion.div>
+        )}
+        {selectedResultDetail && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              className="bg-white w-full max-w-4xl max-h-[90vh] rounded-[40px] shadow-2xl overflow-hidden flex flex-col"
+            >
+              {/* Modal Header */}
+              <div className="p-8 border-b border-black/5 flex justify-between items-center bg-white">
+                <div>
+                  <h2 className="text-2xl font-serif font-medium">{selectedResultDetail.full_name}</h2>
+                  <p className="text-sm text-black/40">{selectedResultDetail.test_name} • {new Date(selectedResultDetail.timestamp).toLocaleString()}</p>
+                </div>
+                <div className="flex items-center gap-6">
+                  <div className="text-right">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-black/30">Final Score</p>
+                    <p className="text-3xl font-serif font-medium">{selectedResultDetail.score} / {selectedResultDetail.total}</p>
+                  </div>
+                  <button 
+                    onClick={() => setSelectedResultDetail(null)}
+                    className="p-3 bg-black/5 hover:bg-black/10 rounded-2xl transition-colors"
+                  >
+                    <X className="w-6 h-6 text-black/40" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Modal Content */}
+              <div className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
+                <div className="grid grid-cols-3 gap-6">
+                  <div className="bg-black/[0.02] p-6 rounded-3xl border border-black/5">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-black/30 mb-1">Tab Switches</p>
+                    <p className="text-2xl font-serif font-medium flex items-center gap-2">
+                      <AlertTriangle className={`w-5 h-5 ${selectedResultDetail.tab_switches > 2 ? 'text-red-500' : 'text-amber-500'}`} />
+                      {selectedResultDetail.tab_switches}
+                    </p>
+                  </div>
+                  <div className="bg-black/[0.02] p-6 rounded-3xl border border-black/5">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-black/30 mb-1">Status</p>
+                    <p className="text-2xl font-serif font-medium">
+                      {selectedResultDetail.manual_review_needed ? 'Pending Review' : 'Graded'}
+                    </p>
+                  </div>
+                  <div className="bg-black/[0.02] p-6 rounded-3xl border border-black/5">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-black/30 mb-1">Accuracy</p>
+                    <p className="text-2xl font-serif font-medium">
+                      {Math.round((selectedResultDetail.score / selectedResultDetail.total) * 100)}%
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  <h3 className="text-lg font-serif font-medium flex items-center gap-2">
+                    <MessageSquare className="w-5 h-5 text-amber-500" />
+                    Detailed Question Breakdown
+                  </h3>
+                  
+                  {selectedResultDetail.questions.map((q: any, idx: number) => {
+                    const userAnswer = selectedResultDetail.answers.find((a: any) => a.id === q.id)?.answer;
+                    const isCorrect = JSON.stringify(userAnswer) === JSON.stringify(q.answer);
+                    
+                    return (
+                      <div key={q.id} className="p-6 bg-white border border-black/5 rounded-3xl space-y-4 shadow-sm">
+                        <div className="flex justify-between items-start gap-4">
+                          <div className="flex gap-4">
+                            <span className="w-8 h-8 bg-black/5 rounded-full flex items-center justify-center text-xs font-bold shrink-0">{idx + 1}</span>
+                            <div>
+                              <p className="font-medium text-sm mb-1">{q.question}</p>
+                              <span className="text-[10px] font-bold text-black/30 uppercase tracking-widest">{q.type} • {q.points} Points</span>
+                            </div>
+                          </div>
+                          <div className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase ${isCorrect ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                            {isCorrect ? 'Correct' : 'Incorrect'}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-6 ml-12">
+                          <div className="space-y-2">
+                            <p className="text-[10px] font-bold text-black/30 uppercase tracking-widest">Candidate's Answer</p>
+                            <div className={`p-4 rounded-2xl text-sm ${isCorrect ? 'bg-emerald-50/50 border border-emerald-100' : 'bg-red-50/50 border border-red-100'}`}>
+                              {q.type === 'MATCH' ? (
+                                <div className="space-y-1">
+                                  {Object.entries(userAnswer || {}).map(([l, r]: any) => (
+                                    <div key={l} className="flex justify-between text-xs">
+                                      <span>{l}</span>
+                                      <span className="text-black/40">→</span>
+                                      <span>{r}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : Array.isArray(userAnswer) ? userAnswer.join(', ') : String(userAnswer || 'No Answer')}
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <p className="text-[10px] font-bold text-black/30 uppercase tracking-widest">Correct Answer</p>
+                            <div className="p-4 bg-black/[0.02] border border-black/5 rounded-2xl text-sm">
+                              {q.type === 'MATCH' ? (
+                                <div className="space-y-1">
+                                  {Object.entries(q.answer || {}).map(([l, r]: any) => (
+                                    <div key={l} className="flex justify-between text-xs">
+                                      <span>{l}</span>
+                                      <span className="text-black/40">→</span>
+                                      <span>{r}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : Array.isArray(q.answer) ? q.answer.join(', ') : String(q.answer)}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
