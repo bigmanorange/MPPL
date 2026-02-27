@@ -424,29 +424,43 @@ async function startServer() {
       if (q.type === 'MCQ' || q.type === 'TF') {
         if (q.answer === userAns) score += q.points;
       } else if (q.type === 'MULTI') {
-        const correct = JSON.parse(q.answer);
-        if (Array.isArray(userAns) && userAns.length === correct.length && userAns.every(v => correct.includes(v))) {
-          score += q.points;
-        }
+        const correct = JSON.parse(q.answer) as string[];
+        const userArr = Array.isArray(userAns) ? userAns : [];
+        
+        // Partial credit logic: (Correct selected - Incorrect selected) / Total Correct
+        let correctCount = 0;
+        userArr.forEach(val => {
+          if (correct.includes(val)) correctCount++;
+          else correctCount--; // Penalty for wrong choice
+        });
+        
+        const earned = Math.max(0, (correctCount / correct.length) * q.points);
+        score += earned;
       } else if (q.type === 'SHORT' || q.type === 'FILL') {
-        if (q.answer.toLowerCase().trim() === userAns.toLowerCase().trim()) {
+        const normalizedCorrect = q.answer.toLowerCase().trim();
+        const normalizedUser = String(userAns).toLowerCase().trim();
+        if (normalizedCorrect === normalizedUser) {
           score += q.points;
         } else {
           manualReviewNeeded = 1;
         }
       } else if (q.type === 'MATCH') {
-        const correct = JSON.parse(q.answer);
-        const userPairs = userAns; // Object
-        let allMatch = true;
-        for (const key in correct) {
-          if (correct[key] !== userPairs[key]) {
-            allMatch = false;
-            break;
-          }
-        }
-        if (allMatch) score += q.points;
+        const correct = JSON.parse(q.answer) as Record<string, string>;
+        const userPairs = userAns as Record<string, string>;
+        const keys = Object.keys(correct);
+        let matchCount = 0;
+        
+        keys.forEach(key => {
+          if (correct[key] === userPairs[key]) matchCount++;
+        });
+        
+        const earned = (matchCount / keys.length) * q.points;
+        score += earned;
       }
     });
+
+    // Round score to 2 decimal places
+    score = Math.round(score * 100) / 100;
 
     attempted.push(Number(testId));
     db.prepare("UPDATE users SET attempted_tests = ? WHERE username = ?").run(JSON.stringify(attempted), username);

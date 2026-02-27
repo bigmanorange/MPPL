@@ -2022,54 +2022,143 @@ export default function App() {
                   
                   {selectedResultDetail.questions.map((q: any, idx: number) => {
                     const userAnswer = selectedResultDetail.answers.find((a: any) => a.id === q.id)?.answer;
-                    const isCorrect = JSON.stringify(userAnswer) === JSON.stringify(q.answer);
+                    
+                    // Calculate points earned for this question (mirroring server logic)
+                    let pointsEarned = 0;
+                    if (q.type === 'MCQ' || q.type === 'TF') {
+                      if (q.answer === userAnswer) pointsEarned = q.points;
+                    } else if (q.type === 'MULTI') {
+                      const correct = Array.isArray(q.answer) ? q.answer : [];
+                      const userArr = Array.isArray(userAnswer) ? userAnswer : [];
+                      let correctCount = 0;
+                      userArr.forEach(val => {
+                        if (correct.includes(val)) correctCount++;
+                        else correctCount--;
+                      });
+                      pointsEarned = Math.max(0, (correctCount / correct.length) * q.points);
+                    } else if (q.type === 'MATCH') {
+                      const correct = q.answer || {};
+                      const userPairs = userAnswer || {};
+                      const keys = Object.keys(correct);
+                      let matchCount = 0;
+                      keys.forEach(key => {
+                        if (correct[key] === userPairs[key]) matchCount++;
+                      });
+                      pointsEarned = (matchCount / keys.length) * q.points;
+                    } else {
+                      if (String(q.answer).toLowerCase().trim() === String(userAnswer || '').toLowerCase().trim()) {
+                        pointsEarned = q.points;
+                      }
+                    }
+                    pointsEarned = Math.round(pointsEarned * 100) / 100;
+
+                    const isCorrect = pointsEarned === q.points;
+                    const isPartial = pointsEarned > 0 && pointsEarned < q.points;
                     
                     return (
-                      <div key={q.id} className="p-6 bg-white border border-black/5 rounded-3xl space-y-4 shadow-sm">
+                      <div key={q.id} className="p-8 bg-white border border-black/5 rounded-[32px] space-y-6 shadow-sm">
                         <div className="flex justify-between items-start gap-4">
                           <div className="flex gap-4">
-                            <span className="w-8 h-8 bg-black/5 rounded-full flex items-center justify-center text-xs font-bold shrink-0">{idx + 1}</span>
+                            <span className="w-10 h-10 bg-black/5 rounded-2xl flex items-center justify-center text-sm font-bold shrink-0">{idx + 1}</span>
                             <div>
-                              <p className="font-medium text-sm mb-1">{q.question}</p>
-                              <span className="text-[10px] font-bold text-black/30 uppercase tracking-widest">{q.type} • {q.points} Points</span>
+                              <p className="font-serif text-lg font-medium mb-1">{q.question}</p>
+                              <div className="flex items-center gap-3">
+                                <span className="text-[10px] font-bold text-black/30 uppercase tracking-widest bg-black/5 px-2 py-0.5 rounded-md">{q.type}</span>
+                                <span className="text-[10px] font-bold text-black/30 uppercase tracking-widest">{q.points} Points Total</span>
+                              </div>
                             </div>
                           </div>
-                          <div className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase ${isCorrect ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
-                            {isCorrect ? 'Correct' : 'Incorrect'}
+                          <div className="text-right">
+                            <div className={`px-4 py-1.5 rounded-full text-[10px] font-bold uppercase mb-2 inline-block ${
+                              isCorrect ? 'bg-emerald-50 text-emerald-600' : 
+                              isPartial ? 'bg-amber-50 text-amber-600' : 
+                              'bg-red-50 text-red-600'
+                            }`}>
+                              {isCorrect ? 'Full Marks' : isPartial ? 'Partial Credit' : 'No Marks'}
+                            </div>
+                            <p className="text-sm font-mono font-bold text-black/40">{pointsEarned} / {q.points}</p>
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-6 ml-12">
-                          <div className="space-y-2">
-                            <p className="text-[10px] font-bold text-black/30 uppercase tracking-widest">Candidate's Answer</p>
-                            <div className={`p-4 rounded-2xl text-sm ${isCorrect ? 'bg-emerald-50/50 border border-emerald-100' : 'bg-red-50/50 border border-red-100'}`}>
-                              {q.type === 'MATCH' ? (
-                                <div className="space-y-1">
-                                  {Object.entries(userAnswer || {}).map(([l, r]: any) => (
-                                    <div key={l} className="flex justify-between text-xs">
-                                      <span>{l}</span>
-                                      <span className="text-black/40">→</span>
-                                      <span>{r}</span>
-                                    </div>
-                                  ))}
+                        {/* Options Section */}
+                        {(q.type === 'MCQ' || q.type === 'MULTI' || q.type === 'TF') && q.options && (
+                          <div className="ml-14 space-y-2">
+                            <p className="text-[10px] font-bold text-black/20 uppercase tracking-widest">Available Options</p>
+                            <div className="flex flex-wrap gap-2">
+                              {Array.isArray(q.options) && q.options.map((opt: string, i: number) => (
+                                <div key={i} className={`px-3 py-1.5 rounded-xl text-xs border ${
+                                  (Array.isArray(q.answer) ? q.answer.includes(opt) : q.answer === opt)
+                                    ? 'bg-emerald-50 border-emerald-100 text-emerald-700 font-medium'
+                                    : 'bg-black/[0.02] border-black/5 text-black/40'
+                                }`}>
+                                  {opt}
                                 </div>
-                              ) : Array.isArray(userAnswer) ? userAnswer.join(', ') : String(userAnswer || 'No Answer')}
+                              ))}
                             </div>
                           </div>
-                          <div className="space-y-2">
-                            <p className="text-[10px] font-bold text-black/30 uppercase tracking-widest">Correct Answer</p>
-                            <div className="p-4 bg-black/[0.02] border border-black/5 rounded-2xl text-sm">
+                        )}
+
+                        <div className="grid grid-cols-2 gap-8 ml-14">
+                          <div className="space-y-3">
+                            <p className="text-[10px] font-bold text-black/30 uppercase tracking-widest flex items-center gap-2">
+                              <User className="w-3 h-3" />
+                              Candidate's Response
+                            </p>
+                            <div className={`p-5 rounded-[24px] text-sm min-h-[80px] flex flex-col justify-center ${
+                              isCorrect ? 'bg-emerald-50/30 border border-emerald-100/50' : 
+                              isPartial ? 'bg-amber-50/30 border border-amber-100/50' : 
+                              'bg-red-50/30 border border-red-100/50'
+                            }`}>
                               {q.type === 'MATCH' ? (
-                                <div className="space-y-1">
-                                  {Object.entries(q.answer || {}).map(([l, r]: any) => (
-                                    <div key={l} className="flex justify-between text-xs">
-                                      <span>{l}</span>
-                                      <span className="text-black/40">→</span>
-                                      <span>{r}</span>
+                                <div className="space-y-2">
+                                  {Object.entries(userAnswer || {}).map(([l, r]: any) => (
+                                    <div key={l} className="flex items-center justify-between text-xs bg-white/50 p-2 rounded-lg border border-black/5">
+                                      <span className="font-medium">{l}</span>
+                                      <span className="text-black/20">→</span>
+                                      <span className={r === q.answer[l] ? 'text-emerald-600 font-bold' : 'text-red-500 font-bold'}>{r}</span>
                                     </div>
                                   ))}
                                 </div>
-                              ) : Array.isArray(q.answer) ? q.answer.join(', ') : String(q.answer)}
+                              ) : Array.isArray(userAnswer) ? (
+                                <div className="flex flex-wrap gap-2">
+                                  {userAnswer.map((val: string) => (
+                                    <span key={val} className={`px-2 py-1 rounded-lg text-xs font-bold ${q.answer.includes(val) ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                                      {val}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="font-medium">{String(userAnswer || 'No Answer')}</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="space-y-3">
+                            <p className="text-[10px] font-bold text-black/30 uppercase tracking-widest flex items-center gap-2">
+                              <CheckCircle2 className="w-3 h-3" />
+                              Correct Key
+                            </p>
+                            <div className="p-5 bg-black/[0.02] border border-black/5 rounded-[24px] text-sm min-h-[80px] flex flex-col justify-center">
+                              {q.type === 'MATCH' ? (
+                                <div className="space-y-2">
+                                  {Object.entries(q.answer || {}).map(([l, r]: any) => (
+                                    <div key={l} className="flex items-center justify-between text-xs bg-white/50 p-2 rounded-lg border border-black/5">
+                                      <span className="font-medium">{l}</span>
+                                      <span className="text-black/20">→</span>
+                                      <span className="text-emerald-600 font-bold">{r}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : Array.isArray(q.answer) ? (
+                                <div className="flex flex-wrap gap-2">
+                                  {q.answer.map((val: string) => (
+                                    <span key={val} className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded-lg text-xs font-bold">
+                                      {val}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="font-medium text-emerald-700">{String(q.answer)}</span>
+                              )}
                             </div>
                           </div>
                         </div>
