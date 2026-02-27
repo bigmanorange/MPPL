@@ -338,7 +338,46 @@ export default function App() {
   };
 
   const handleCreateTest = async () => {
-    if (!newTestName) return;
+    if (!newTestName) {
+      alert("Please enter a test name");
+      return;
+    }
+
+    // Validation
+    for (let i = 0; i < newQuestions.length; i++) {
+      const q = newQuestions[i];
+      if (!q.question.trim()) {
+        alert(`Question ${i + 1} is empty`);
+        return;
+      }
+      if (['MCQ', 'MULTI', 'MATCH'].includes(q.type)) {
+        if (q.type === 'MATCH') {
+          if (q.options.left.some((opt: string) => !opt.trim()) || q.options.right.some((opt: string) => !opt.trim())) {
+            alert(`Please fill all matching items for Question ${i + 1}`);
+            return;
+          }
+        } else {
+          if (q.options.some((opt: string) => !opt.trim())) {
+            alert(`Please fill all options for Question ${i + 1}`);
+            return;
+          }
+          if (q.type === 'MCQ' && !q.answer) {
+            alert(`Please select a correct answer for Question ${i + 1}`);
+            return;
+          }
+          if (q.type === 'MULTI' && (!Array.isArray(q.answer) || q.answer.length === 0)) {
+            alert(`Please select at least one correct answer for Question ${i + 1}`);
+            return;
+          }
+        }
+      } else if (['SHORT', 'FILL'].includes(q.type)) {
+        if (!String(q.answer).trim()) {
+          alert(`Please provide a correct answer for Question ${i + 1}`);
+          return;
+        }
+      }
+    }
+
     try {
       const url = isEditingTest ? `/api/tests/${isEditingTest}` : '/api/tests';
       const method = isEditingTest ? 'PUT' : 'POST';
@@ -1518,59 +1557,101 @@ export default function App() {
                                       ))}
                                     </div>
                                   </div>
-                                ) : (q.type !== 'SHORT' && q.type !== 'FILL') ? (
-                                  <div className="grid grid-cols-2 gap-3">
-                                    {q.options.map((opt: string, oIdx: number) => (
-                                      <div key={oIdx} className="relative">
-                                        <input 
-                                          type="text" 
-                                          placeholder={`Option ${oIdx + 1}`}
-                                          value={opt}
+                                ) : (q.type === 'MCQ' || q.type === 'MULTI') ? (
+                                  <div className="space-y-4">
+                                    <div className="grid grid-cols-2 gap-3">
+                                      {q.options.map((opt: string, oIdx: number) => (
+                                        <div key={oIdx} className="flex gap-2">
+                                          <input 
+                                            type="text" 
+                                            placeholder={`Option ${oIdx + 1}`}
+                                            value={opt}
+                                            onChange={e => {
+                                              const updated = [...newQuestions];
+                                              updated[qIdx].options[oIdx] = e.target.value;
+                                              setNewQuestions(updated);
+                                            }}
+                                            className="flex-1 bg-white border border-black/5 rounded-xl py-3 px-4 outline-none text-xs"
+                                          />
+                                          {q.type === 'MULTI' && (
+                                            <button 
+                                              onClick={() => {
+                                                const updated = [...newQuestions];
+                                                const current = updated[qIdx].answer as string[];
+                                                if (current.includes(opt)) {
+                                                  updated[qIdx].answer = current.filter(v => v !== opt);
+                                                } else {
+                                                  updated[qIdx].answer = [...current, opt];
+                                                }
+                                                setNewQuestions(updated);
+                                              }}
+                                              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+                                                (q.answer as string[]).includes(opt)
+                                                ? 'bg-emerald-500 text-white' 
+                                                : 'bg-black/5 text-black/20'
+                                              }`}
+                                            >
+                                              <Check className="w-4 h-4" />
+                                            </button>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                    {q.type === 'MCQ' && (
+                                      <div className="flex items-center gap-3">
+                                        <span className="text-[10px] font-bold text-black/30 uppercase tracking-widest">Correct Answer:</span>
+                                        <select 
+                                          value={q.answer}
                                           onChange={e => {
                                             const updated = [...newQuestions];
-                                            updated[qIdx].options[oIdx] = e.target.value;
+                                            updated[qIdx].answer = e.target.value;
                                             setNewQuestions(updated);
                                           }}
-                                          className="w-full bg-white border border-black/5 rounded-xl py-3 px-4 outline-none text-xs"
-                                        />
-                                        <button 
-                                          onClick={() => {
-                                            const updated = [...newQuestions];
-                                            if (q.type === 'MULTI') {
-                                              const current = updated[qIdx].answer as string[];
-                                              if (current.includes(opt)) {
-                                                updated[qIdx].answer = current.filter(v => v !== opt);
-                                              } else {
-                                                updated[qIdx].answer = [...current, opt];
-                                              }
-                                            } else {
-                                              updated[qIdx].answer = opt;
-                                            }
-                                            setNewQuestions(updated);
-                                          }}
-                                          className={`absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full flex items-center justify-center transition-all ${
-                                            (q.type === 'MULTI' ? (q.answer as string[]).includes(opt) : q.answer === opt)
-                                            ? 'bg-emerald-500 text-white' 
-                                            : 'bg-black/5 text-transparent'
-                                          }`}
+                                          className="bg-white border border-black/5 rounded-xl px-4 py-2 text-xs font-medium outline-none"
                                         >
-                                          <Check className="w-3 h-3" />
-                                        </button>
+                                          <option value="">Select Correct Option</option>
+                                          {q.options.filter((o: string) => o.trim()).map((opt: string, i: number) => (
+                                            <option key={i} value={opt}>{opt}</option>
+                                          ))}
+                                        </select>
                                       </div>
+                                    )}
+                                  </div>
+                                ) : q.type === 'TF' ? (
+                                  <div className="flex gap-4">
+                                    {['True', 'False'].map(val => (
+                                      <button
+                                        key={val}
+                                        onClick={() => {
+                                          const updated = [...newQuestions];
+                                          updated[qIdx].answer = val;
+                                          setNewQuestions(updated);
+                                        }}
+                                        className={`flex-1 py-3 rounded-2xl font-bold text-sm transition-all ${
+                                          q.answer === val 
+                                          ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' 
+                                          : 'bg-black/5 text-black/40 hover:bg-black/10'
+                                        }`}
+                                      >
+                                        {val}
+                                      </button>
                                     ))}
                                   </div>
                                 ) : (
-                                  <input 
-                                    type="text" 
-                                    placeholder="Correct Answer"
-                                    value={q.answer}
-                                    onChange={e => {
-                                      const updated = [...newQuestions];
-                                      updated[qIdx].answer = e.target.value;
-                                      setNewQuestions(updated);
-                                    }}
-                                    className="w-full bg-amber-50 border border-amber-100 rounded-2xl py-4 px-5 outline-none text-sm text-amber-900 font-medium"
-                                  />
+                                  <div className="space-y-2">
+                                    <p className="text-[10px] font-bold text-black/30 uppercase tracking-widest">Correct Answer (Case Insensitive)</p>
+                                    <input 
+                                      type="text" 
+                                      placeholder="Type the correct answer here..."
+                                      value={q.answer}
+                                      onChange={e => {
+                                        const updated = [...newQuestions];
+                                        updated[qIdx].answer = e.target.value;
+                                        setNewQuestions(updated);
+                                      }}
+                                      className="w-full bg-amber-50 border border-amber-100 rounded-2xl py-4 px-5 outline-none text-sm text-amber-900 font-medium"
+                                    />
+                                  </div>
                                 )}
                               </div>
                             </div>

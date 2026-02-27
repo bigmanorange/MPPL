@@ -39,9 +39,13 @@ echo "⚙️ Installing app dependencies..."
 npm install
 
 # 7. Start the Services
-echo "🚦 Starting MAAVIS TALENT HUB and Cloudflare Tunnel..."
+echo "🚦 Starting MAAVIS TALENT HUB, Cloudflare Tunnel, and Auto-Updater..."
 DATA_DIR=~/server/data pm2 start server.ts --name "maavis-hub" --interpreter tsx
 pm2 start "cloudflared tunnel --url http://localhost:3000" --name "cf-tunnel"
+
+# Setup Auto-Updater
+chmod +x auto-update.sh
+pm2 start ./auto-update.sh --name "maavis-updater"
 
 # 8. Finalize
 pm2 save
