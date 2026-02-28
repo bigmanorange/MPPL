@@ -29,7 +29,6 @@ import {
 interface Question {
   id: number;
   question: string;
-  image_url?: string;
   type: 'MCQ' | 'MULTI' | 'TF' | 'SHORT' | 'FILL' | 'MATCH';
   options: any;
   points: number;
@@ -86,7 +85,6 @@ interface Candidate {
 
 export default function App() {
   const [view, setView] = useState<'login' | 'register' | 'dashboard' | 'admin' | 'instructions' | 'test' | 'result'>('login');
-  const [adminTab, setAdminTab] = useState<'overview' | 'assessments' | 'candidates' | 'users' | 'results'>('overview');
   const [userRole, setUserRole] = useState<'candidate' | 'admin'>('candidate');
   const [username, setUsername] = useState('');
   const [fullName, setFullName] = useState('');
@@ -123,11 +121,10 @@ export default function App() {
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [assignments, setAssignments] = useState<{[key: number]: number[]}>({});
   const [assigningUserId, setAssigningUserId] = useState<number | null>(null);
-  const [assignEmailForm, setAssignEmailForm] = useState({ email: '', testId: '' });
+  
+  const [adminTab, setAdminTab] = useState<'overview' | 'assessments' | 'candidates' | 'users' | 'results'>('overview');
   const [showAssignEmail, setShowAssignEmail] = useState(false);
-  const [quickAssignEmail, setQuickAssignEmail] = useState('');
-  const [quickAssignTestId, setQuickAssignTestId] = useState<number | null>(null);
-  const [isAssigningByEmail, setIsAssigningByEmail] = useState(false);
+  const [assignEmailForm, setAssignEmailForm] = useState({ email: '', testId: '' });
   
   // Admin Create Test State
   const [newTestName, setNewTestName] = useState('');
@@ -162,8 +159,8 @@ export default function App() {
       });
       const data = await res.json();
       if (res.ok) {
-        setSuccess(data.message || 'Registration successful! Please check your email to verify your account.');
-        // Don't switch view immediately, let them see the success message
+        setSuccess('Registration successful! Please login.');
+        setView('login');
       } else {
         setError(data.error || 'Registration failed');
       }
@@ -199,50 +196,11 @@ export default function App() {
     });
   };
 
-  const handleAssignByEmail = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!assignEmailForm.email || !assignEmailForm.testId) return;
-    try {
-      const res = await fetch('/api/assignments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: assignEmailForm.email, test_id: Number(assignEmailForm.testId) }),
-      });
-      if (res.ok) {
-        setAssignEmailForm({ email: '', testId: '' });
-        setShowAssignEmail(false);
-        alert('Invite sent successfully!');
-      } else {
-        const data = await res.json();
-        alert(data.error || 'Failed to send invite');
-      }
-    } catch (err) {
-      alert('Connection error');
-    }
-  };
-
-  const handleQuickAssign = async () => {
-    if (!quickAssignEmail || !quickAssignTestId) return;
-    setIsAssigningByEmail(true);
-    try {
-      const res = await fetch('/api/assignments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: quickAssignEmail, test_id: quickAssignTestId }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setSuccess(`Invite sent to ${quickAssignEmail}`);
-        setQuickAssignEmail('');
-        setTimeout(() => setSuccess(''), 3000);
-      } else {
-        setError(data.error || 'Assignment failed');
-      }
-    } catch (err) {
-      setError('Connection error');
-    } finally {
-      setIsAssigningByEmail(false);
-    }
+  const handleMatching = (qId: number, left: string, right: string) => {
+    const newPairs = { ...matchingPairs, [left]: right };
+    setMatchingPairs(newPairs);
+    handleAnswer(qId, newPairs);
+    setSelectedLeft(null);
   };
 
   const exportResults = () => {
@@ -471,6 +429,27 @@ export default function App() {
       setIsEditingTest(test.id);
     } catch (err) {
       console.error('Failed to fetch test for editing:', err);
+    }
+  };
+
+  const handleAssignByEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/admin/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(assignEmailForm),
+      });
+      if (res.ok) {
+        setAssignEmailForm({ email: '', testId: '' });
+        setShowAssignEmail(false);
+        alert('Assessment invite sent successfully');
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to send invite');
+      }
+    } catch (err) {
+      alert('Connection error');
     }
   };
 
@@ -1066,217 +1045,602 @@ export default function App() {
             </div>
 
             <div className="space-y-8">
-              {/* Overview Tab */}
+              {showProfileSettings && (
+                <motion.div 
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  className="bg-white p-8 rounded-[40px] border border-black/5 shadow-sm mb-8 max-w-md mx-auto"
+                >
+                  <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-xl font-serif font-medium">Admin Profile Settings</h3>
+                    <button onClick={() => setShowProfileSettings(false)} className="text-black/30 hover:text-black">Close</button>
+                  </div>
+                  <form onSubmit={handleSelfChangePassword} className="space-y-4">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-black/30">New Password</label>
+                      <input 
+                        type="password" 
+                        value={newPassword}
+                        onChange={e => setNewPassword(e.target.value)}
+                        className="w-full bg-black/5 border-none rounded-xl py-3 px-4 outline-none text-sm"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-black/30">Confirm Password</label>
+                      <input 
+                        type="password" 
+                        value={confirmPassword}
+                        onChange={e => setConfirmPassword(e.target.value)}
+                        className="w-full bg-black/5 border-none rounded-xl py-3 px-4 outline-none text-sm"
+                        required
+                      />
+                    </div>
+                    <button type="submit" className="w-full bg-[#0F172A] text-white py-3 rounded-xl font-bold hover:bg-[#1E293B] transition-all">
+                      Update Admin Password
+                    </button>
+                  </form>
+                </motion.div>
+              )}
+
               {adminTab === 'overview' && (
                 <motion.div 
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="space-y-8"
+                  className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
                 >
-                  {/* Stats Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    {[
-                      { label: 'Total Candidates', value: candidates.length, icon: User, color: 'text-blue-500', bg: 'bg-blue-50' },
-                      { label: 'Active Assessments', value: tests.length, icon: CheckSquare, color: 'text-amber-500', bg: 'bg-amber-50' },
-                      { label: 'Total Results', value: allResults.length, icon: ClipboardX, color: 'text-emerald-500', bg: 'bg-emerald-50' },
-                      { label: 'Avg. Performance', value: allResults.length > 0 ? `${Math.round((allResults.reduce((acc, r) => acc + (r.score / r.total), 0) / allResults.length) * 100)}%` : '0%', icon: Layers, color: 'text-purple-500', bg: 'bg-purple-50' },
-                    ].map((stat, i) => (
-                      <div key={i} className="bg-white p-6 rounded-[32px] border border-black/5 shadow-sm flex items-center gap-4">
-                        <div className={`w-12 h-12 ${stat.bg} ${stat.color} rounded-2xl flex items-center justify-center`}>
-                          <stat.icon className="w-6 h-6" />
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-bold text-black/30 uppercase tracking-widest">{stat.label}</p>
-                          <p className="text-2xl font-serif font-bold">{stat.value}</p>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="bg-white p-8 rounded-[32px] border border-black/5 shadow-sm">
+                    <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center mb-4">
+                      <CheckSquare className="w-6 h-6 text-amber-600" />
+                    </div>
+                    <p className="text-3xl font-serif font-bold text-[#0F172A]">{tests.length}</p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-black/30">Active Assessments</p>
+                  </div>
+                  <div className="bg-white p-8 rounded-[32px] border border-black/5 shadow-sm">
+                    <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center mb-4">
+                      <User className="w-6 h-6 text-emerald-600" />
+                    </div>
+                    <p className="text-3xl font-serif font-bold text-[#0F172A]">{candidates.length}</p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-black/30">Total Candidates</p>
+                  </div>
+                  <div className="bg-white p-8 rounded-[32px] border border-black/5 shadow-sm">
+                    <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center mb-4">
+                      <ClipboardX className="w-6 h-6 text-indigo-600" />
+                    </div>
+                    <p className="text-3xl font-serif font-bold text-[#0F172A]">{allResults.length}</p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-black/30">Completed Tests</p>
+                  </div>
+                  <div className="bg-white p-8 rounded-[32px] border border-black/5 shadow-sm">
+                    <div className="w-12 h-12 bg-rose-50 rounded-2xl flex items-center justify-center mb-4">
+                      <ShieldAlert className="w-6 h-6 text-rose-600" />
+                    </div>
+                    <p className="text-3xl font-serif font-bold text-[#0F172A]">{allResults.filter(r => r.tab_switches > 0).length}</p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-black/30">Proctoring Alerts</p>
                   </div>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    {/* Recent Activity */}
-                    <div className="bg-white p-8 rounded-[40px] border border-black/5 shadow-sm">
-                      <h3 className="text-xl font-serif font-medium mb-6">Recent Assessment Activity</h3>
+                  <div className="md:col-span-2 lg:col-span-3 bg-[#0F172A] p-10 rounded-[40px] text-white overflow-hidden relative">
+                    <div className="relative z-10">
+                      <h3 className="text-2xl font-serif font-medium mb-4">Welcome back, Admin</h3>
+                      <p className="text-white/60 text-sm max-w-md mb-8">You have {allResults.filter(r => r.manual_review_needed).length} assessments pending manual review. Your pipeline is currently active with {candidates.filter(c => c.status === 'Applied').length} new applications.</p>
+                      <div className="flex gap-4">
+                        <button onClick={() => setAdminTab('assessments')} className="bg-amber-500 text-[#0F172A] px-6 py-3 rounded-2xl font-bold text-sm hover:bg-amber-600 transition-all">Create New Test</button>
+                        <button onClick={() => setAdminTab('candidates')} className="bg-white/10 text-white px-6 py-3 rounded-2xl font-bold text-sm hover:bg-white/20 transition-all">View Pipeline</button>
+                      </div>
+                    </div>
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/10 blur-[100px] -mr-32 -mt-32" />
+                  </div>
+
+                  <div className="bg-white p-8 rounded-[40px] border border-black/5 shadow-sm">
+                    <h4 className="text-xs font-bold uppercase tracking-widest text-black/40 mb-6">Quick Actions</h4>
+                    <div className="space-y-3">
+                      <button onClick={() => setAdminTab('users')} className="w-full flex items-center gap-3 p-4 bg-black/[0.02] hover:bg-black/[0.05] rounded-2xl transition-all group">
+                        <div className="w-8 h-8 bg-white rounded-xl flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                          <User className="w-4 h-4 text-amber-500" />
+                        </div>
+                        <span className="text-xs font-bold text-black/70">Add New User</span>
+                      </button>
+                      <button onClick={exportResults} className="w-full flex items-center gap-3 p-4 bg-black/[0.02] hover:bg-black/[0.05] rounded-2xl transition-all group">
+                        <div className="w-8 h-8 bg-white rounded-xl flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                          <Download className="w-4 h-4 text-amber-500" />
+                        </div>
+                        <span className="text-xs font-bold text-black/70">Export All Data</span>
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {adminTab === 'assessments' && (
+                <motion.div 
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="grid grid-cols-1 xl:grid-cols-3 gap-8"
+                >
+                  {/* Left Column: Manage Assessments */}
+                  <div className="xl:col-span-1 space-y-8">
+                    <div className="bg-white p-8 rounded-[32px] border border-black/5 shadow-sm">
+                      <h3 className="text-xl font-serif font-medium mb-6 flex items-center gap-3">
+                        <Settings className="w-5 h-5 text-amber-500" />
+                        Manage Assessments
+                      </h3>
                       <div className="space-y-4">
-                        {allResults.slice(0, 5).map(res => (
-                          <div key={res.id} className="flex items-center justify-between p-4 bg-black/[0.02] rounded-2xl border border-black/5">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm">
-                                <User className="w-5 h-5 text-black/20" />
-                              </div>
-                              <div>
-                                <p className="text-sm font-bold">{res.full_name}</p>
-                                <p className="text-[10px] text-black/30">{res.test_name}</p>
-                              </div>
+                        {tests.map(test => (
+                          <div key={test.id} className="p-4 bg-black/[0.02] rounded-2xl border border-black/5 flex justify-between items-center">
+                            <div>
+                              <p className="font-bold text-sm">{test.name}</p>
+                              <p className="text-[10px] text-black/30">{test.description.substring(0, 50)}...</p>
                             </div>
-                            <div className="text-right">
-                              <p className="text-sm font-mono font-bold">{res.score}/{res.total}</p>
-                              <p className="text-[8px] text-black/30 uppercase">{new Date(res.timestamp).toLocaleDateString()}</p>
+                            <div className="flex items-center gap-2">
+                              <button 
+                                onClick={() => handleEditTest(test)}
+                                className="p-2 bg-white border border-black/5 rounded-lg hover:bg-amber-50 hover:text-amber-600 transition-all"
+                              >
+                                <Settings className="w-4 h-4" />
+                              </button>
+                              <button 
+                                onClick={async () => {
+                                  if (confirm('Are you sure you want to delete this test?')) {
+                                    await fetch(`/api/tests/${test.id}`, { method: 'DELETE' });
+                                    fetchTests();
+                                  }
+                                }}
+                                className="p-2 bg-white border border-black/5 rounded-lg hover:bg-red-50 hover:text-red-600 transition-all"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
                             </div>
                           </div>
                         ))}
-                        {allResults.length === 0 && <p className="text-center py-8 text-black/20 text-sm">No recent activity found.</p>}
                       </div>
                     </div>
+                  </div>
 
-                    {/* Quick Actions */}
+                  {/* Right Column: Quiz Creator */}
+                  <div className="xl:col-span-2 space-y-8">
                     <div className="bg-white p-8 rounded-[40px] border border-black/5 shadow-sm">
-                      <h3 className="text-xl font-serif font-medium mb-6">Quick Management</h3>
-                      <div className="grid grid-cols-2 gap-4">
-                        <button onClick={() => setAdminTab('assessments')} className="p-6 bg-amber-50 border border-amber-100 rounded-3xl text-left group hover:bg-amber-100 transition-all">
-                          <Plus className="w-8 h-8 text-amber-500 mb-4 group-hover:scale-110 transition-transform" />
-                          <p className="font-bold text-sm text-amber-900">Create Test</p>
-                          <p className="text-[10px] text-amber-700/60">Build a new assessment module</p>
+                      <h3 className="text-2xl font-serif font-medium mb-8 flex items-center gap-3">
+                        <Plus className="w-6 h-6 text-amber-500" />
+                        {isEditingTest ? 'Edit Assessment' : 'Modular Quiz Creator'}
+                      </h3>
+                      
+                      <div className="space-y-6">
+                        {/* Basic Info */}
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="col-span-2">
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-black/30 mb-2 block">Quiz Details</label>
+                            <input 
+                              type="text" 
+                              placeholder="Quiz Name"
+                              value={newTestName}
+                              onChange={e => setNewTestName(e.target.value)}
+                              className="w-full bg-black/5 border-none rounded-2xl py-4 px-5 outline-none text-sm mb-3"
+                            />
+                            <textarea 
+                              placeholder="Quiz Description"
+                              value={newTestDesc}
+                              onChange={e => setNewTestDesc(e.target.value)}
+                              className="w-full bg-black/5 border-none rounded-2xl py-4 px-5 outline-none h-24 text-sm resize-none"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Modular Configuration */}
+                        <div className="p-6 bg-black/[0.02] rounded-[32px] border border-black/5">
+                          <h4 className="text-xs font-bold uppercase tracking-widest text-black/40 mb-6 flex items-center gap-2">
+                            <Settings className="w-4 h-4" />
+                            Module Configuration
+                          </h4>
+                          <div className="grid grid-cols-2 gap-6">
+                            <div className="space-y-4">
+                              <label className="flex items-center gap-3 cursor-pointer group">
+                                <div className={`w-10 h-6 rounded-full transition-all relative ${newTestConfig.grading_enabled ? 'bg-amber-500' : 'bg-black/10'}`}>
+                                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${newTestConfig.grading_enabled ? 'left-5' : 'left-1'}`} />
+                                </div>
+                                <input type="checkbox" className="hidden" checked={newTestConfig.grading_enabled} onChange={e => setNewTestConfig({...newTestConfig, grading_enabled: e.target.checked})} />
+                                <span className="text-xs font-medium text-black/70 group-hover:text-black">Auto Grading</span>
+                              </label>
+                              <label className="flex items-center gap-3 cursor-pointer group">
+                                <div className={`w-10 h-6 rounded-full transition-all relative ${newTestConfig.timing_enabled ? 'bg-amber-500' : 'bg-black/10'}`}>
+                                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${newTestConfig.timing_enabled ? 'left-5' : 'left-1'}`} />
+                                </div>
+                                <input type="checkbox" className="hidden" checked={newTestConfig.timing_enabled} onChange={e => setNewTestConfig({...newTestConfig, timing_enabled: e.target.checked})} />
+                                <span className="text-xs font-medium text-black/70 group-hover:text-black">Timer Module</span>
+                              </label>
+                              <label className="flex items-center gap-3 cursor-pointer group">
+                                <div className={`w-10 h-6 rounded-full transition-all relative ${newTestConfig.randomization_enabled ? 'bg-amber-500' : 'bg-black/10'}`}>
+                                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${newTestConfig.randomization_enabled ? 'left-5' : 'left-1'}`} />
+                                </div>
+                                <input type="checkbox" className="hidden" checked={newTestConfig.randomization_enabled} onChange={e => setNewTestConfig({...newTestConfig, randomization_enabled: e.target.checked})} />
+                                <span className="text-xs font-medium text-black/70 group-hover:text-black">Randomize Order</span>
+                              </label>
+                            </div>
+                            <div className="space-y-4">
+                              <label className="flex items-center gap-3 cursor-pointer group">
+                                <div className={`w-10 h-6 rounded-full transition-all relative ${newTestConfig.anti_cheat_enabled ? 'bg-amber-500' : 'bg-black/10'}`}>
+                                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${newTestConfig.anti_cheat_enabled ? 'left-5' : 'left-1'}`} />
+                                </div>
+                                <input type="checkbox" className="hidden" checked={newTestConfig.anti_cheat_enabled} onChange={e => setNewTestConfig({...newTestConfig, anti_cheat_enabled: e.target.checked})} />
+                                <span className="text-xs font-medium text-black/70 group-hover:text-black">Anti-Cheat</span>
+                              </label>
+                              <label className="flex items-center gap-3 cursor-pointer group">
+                                <div className={`w-10 h-6 rounded-full transition-all relative ${newTestConfig.show_answers ? 'bg-amber-500' : 'bg-black/10'}`}>
+                                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${newTestConfig.show_answers ? 'left-5' : 'left-1'}`} />
+                                </div>
+                                <input type="checkbox" className="hidden" checked={newTestConfig.show_answers} onChange={e => setNewTestConfig({...newTestConfig, show_answers: e.target.checked})} />
+                                <span className="text-xs font-medium text-black/70 group-hover:text-black">Show Answers</span>
+                              </label>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold text-black/30">Attempts:</span>
+                                <input type="number" value={newTestConfig.attempt_limit} onChange={e => setNewTestConfig({...newTestConfig, attempt_limit: Number(e.target.value)})} className="w-12 bg-white border border-black/5 rounded-lg px-2 py-1 text-xs outline-none" />
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {newTestConfig.timing_enabled && (
+                            <div className="mt-6 pt-6 border-t border-black/5 grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="text-[10px] font-bold text-black/30 block mb-1">Total Time (sec)</label>
+                                <input type="number" value={newTestConfig.total_time} onChange={e => setNewTestConfig({...newTestConfig, total_time: Number(e.target.value)})} className="w-full bg-white border border-black/5 rounded-xl px-4 py-2 text-sm outline-none" />
+                              </div>
+                              <div>
+                                <label className="text-[10px] font-bold text-black/30 block mb-1">Per Question (sec)</label>
+                                <input type="number" value={newTestConfig.per_question_time} onChange={e => setNewTestConfig({...newTestConfig, per_question_time: Number(e.target.value)})} className="w-full bg-white border border-black/5 rounded-xl px-4 py-2 text-sm outline-none" placeholder="0 = disabled" />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Question Builder */}
+                        <div className="space-y-6">
+                          <div className="flex justify-between items-center">
+                            <h4 className="text-xs font-bold uppercase tracking-widest text-black/40">Question Bank</h4>
+                            <div className="flex gap-2">
+                              <button 
+                                onClick={() => setShowBulkImport(!showBulkImport)}
+                                className="flex items-center gap-2 text-xs text-black/40 font-bold hover:bg-black/5 px-4 py-2 rounded-xl transition-all"
+                              >
+                                <Download className="w-4 h-4" />
+                                BULK IMPORT
+                              </button>
+                              <button 
+                                onClick={() => setNewQuestions([...newQuestions, { question: '', type: 'MCQ', options: ['', '', '', ''], answer: '', points: 1 }])}
+                                className="flex items-center gap-2 text-xs text-amber-600 font-bold hover:bg-amber-50 px-4 py-2 rounded-xl transition-all"
+                              >
+                                <Plus className="w-4 h-4" />
+                                ADD QUESTION
+                              </button>
+                            </div>
+                          </div>
+
+                          {showBulkImport && (
+                            <motion.div 
+                              initial={{ opacity: 0, y: -10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              className="p-6 bg-black/[0.02] rounded-[32px] border border-black/5 space-y-4"
+                            >
+                              <p className="text-[10px] text-black/40">Paste a JSON array of questions. Example: <code className="bg-black/5 p-1 rounded">{'[{"question": "...", "type": "MCQ", "options": ["...", "..."], "answer": "...", "points": 1}]'}</code></p>
+                              <textarea 
+                                value={bulkImportJson}
+                                onChange={e => setBulkImportJson(e.target.value)}
+                                placeholder='[{"question": "...", "type": "MCQ", ...}]'
+                                className="w-full h-32 bg-white border border-black/5 rounded-2xl p-4 text-xs font-mono outline-none"
+                              />
+                              <div className="flex justify-end gap-3">
+                                <button onClick={() => setShowBulkImport(false)} className="text-xs text-black/30 font-bold">Cancel</button>
+                                <button onClick={handleBulkImport} className="bg-[#0F172A] text-white px-6 py-2 rounded-full text-xs font-bold">Import Questions</button>
+                              </div>
+                            </motion.div>
+                          )}
+
+                          <div className="space-y-6 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+                            {newQuestions.map((q, qIdx) => (
+                              <motion.div 
+                                layout
+                                key={qIdx} 
+                                className="p-6 bg-black/[0.02] rounded-[32px] border border-black/5 space-y-4 relative group"
+                              >
+                                <button 
+                                  onClick={() => setNewQuestions(newQuestions.filter((_, i) => i !== qIdx))}
+                                  className="absolute top-6 right-6 p-2 text-black/20 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+
+                                <div className="flex gap-4">
+                                  <div className="flex-1 space-y-4">
+                                    <div className="flex gap-3">
+                                      <select 
+                                        value={q.type}
+                                        onChange={e => {
+                                          const updated = [...newQuestions];
+                                          updated[qIdx].type = e.target.value;
+                                          if (e.target.value === 'MATCH') {
+                                            updated[qIdx].options = { left: ['', '', ''], right: ['', '', ''] };
+                                            updated[qIdx].answer = {};
+                                          } else if (e.target.value === 'TF') {
+                                            updated[qIdx].options = ['True', 'False'];
+                                            updated[qIdx].answer = 'True';
+                                          } else if (e.target.value === 'MULTI') {
+                                            updated[qIdx].answer = [];
+                                          }
+                                          setNewQuestions(updated);
+                                        }}
+                                        className="bg-white border border-black/5 rounded-xl px-3 py-2 text-[10px] font-bold outline-none"
+                                      >
+                                        <option value="MCQ">MCQ</option>
+                                        <option value="MULTI">Multiple Select</option>
+                                        <option value="TF">True/False</option>
+                                        <option value="SHORT">Short Answer</option>
+                                        <option value="FILL">Fill in Blank</option>
+                                        <option value="MATCH">Matching</option>
+                                      </select>
+                                      <input 
+                                        type="number" 
+                                        placeholder="Pts"
+                                        value={q.points}
+                                        onChange={e => {
+                                          const updated = [...newQuestions];
+                                          updated[qIdx].points = Number(e.target.value);
+                                          setNewQuestions(updated);
+                                        }}
+                                        className="w-16 bg-white border border-black/5 rounded-xl px-3 py-2 text-[10px] font-bold outline-none"
+                                      />
+                                    </div>
+                                    <input 
+                                      type="text" 
+                                      placeholder={`Question ${qIdx + 1}`}
+                                      value={q.question}
+                                      onChange={e => {
+                                        const updated = [...newQuestions];
+                                        updated[qIdx].question = e.target.value;
+                                        setNewQuestions(updated);
+                                      }}
+                                      className="w-full bg-white border border-black/5 rounded-2xl py-4 px-5 outline-none text-sm font-medium"
+                                    />
+
+                                    {/* Options based on type */}
+                                    {q.type === 'MATCH' ? (
+                                      <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                          <p className="text-[10px] font-bold text-black/30">Left List</p>
+                                          {q.options.left.map((opt: string, oIdx: number) => (
+                                            <input 
+                                              key={oIdx}
+                                              type="text"
+                                              value={opt}
+                                              onChange={e => {
+                                                const updated = [...newQuestions];
+                                                updated[qIdx].options.left[oIdx] = e.target.value;
+                                                setNewQuestions(updated);
+                                              }}
+                                              className="w-full bg-white border border-black/5 rounded-xl py-2 px-3 text-xs outline-none"
+                                              placeholder={`Item ${oIdx + 1}`}
+                                            />
+                                          ))}
+                                        </div>
+                                        <div className="space-y-2">
+                                          <p className="text-[10px] font-bold text-black/30">Right List (Correct Pairs)</p>
+                                          {q.options.right.map((opt: string, oIdx: number) => (
+                                            <input 
+                                              key={oIdx}
+                                              type="text"
+                                              value={opt}
+                                              onChange={e => {
+                                                const updated = [...newQuestions];
+                                                updated[qIdx].options.right[oIdx] = e.target.value;
+                                                // Update answer automatically for matching
+                                                const leftItem = updated[qIdx].options.left[oIdx];
+                                                if (leftItem) {
+                                                  updated[qIdx].answer = { ...updated[qIdx].answer, [leftItem]: e.target.value };
+                                                }
+                                                setNewQuestions(updated);
+                                              }}
+                                              className="w-full bg-amber-50 border border-amber-100 rounded-xl py-2 px-3 text-xs outline-none"
+                                              placeholder={`Match for Item ${oIdx + 1}`}
+                                            />
+                                          ))}
+                                        </div>
+                                      </div>
+                                    ) : (q.type === 'MCQ' || q.type === 'MULTI') ? (
+                                      <div className="space-y-4">
+                                        <div className="grid grid-cols-2 gap-3">
+                                          {q.options.map((opt: string, oIdx: number) => (
+                                            <div key={oIdx} className="flex gap-2">
+                                              <input 
+                                                type="text" 
+                                                placeholder={`Option ${oIdx + 1}`}
+                                                value={opt}
+                                                onChange={e => {
+                                                  const updated = [...newQuestions];
+                                                  updated[qIdx].options[oIdx] = e.target.value;
+                                                  setNewQuestions(updated);
+                                                }}
+                                                className="flex-1 bg-white border border-black/5 rounded-xl py-3 px-4 outline-none text-xs"
+                                              />
+                                              {q.type === 'MULTI' && (
+                                                <button 
+                                                  onClick={() => {
+                                                    const updated = [...newQuestions];
+                                                    const current = updated[qIdx].answer as string[];
+                                                    if (current.includes(opt)) {
+                                                      updated[qIdx].answer = current.filter(v => v !== opt);
+                                                    } else {
+                                                      updated[qIdx].answer = [...current, opt];
+                                                    }
+                                                    setNewQuestions(updated);
+                                                  }}
+                                                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+                                                    (q.answer as string[]).includes(opt)
+                                                    ? 'bg-emerald-500 text-white' 
+                                                    : 'bg-black/5 text-black/20'
+                                                  }`}
+                                                >
+                                                  <Check className="w-4 h-4" />
+                                                </button>
+                                              )}
+                                            </div>
+                                          ))}
+                                        </div>
+                                        {q.type === 'MCQ' && (
+                                          <div className="flex items-center gap-3">
+                                            <span className="text-[10px] font-bold text-black/30 uppercase tracking-widest">Correct Answer:</span>
+                                            <select 
+                                              value={q.answer}
+                                              onChange={e => {
+                                                const updated = [...newQuestions];
+                                                updated[qIdx].answer = e.target.value;
+                                                setNewQuestions(updated);
+                                              }}
+                                              className="bg-white border border-black/5 rounded-xl px-4 py-2 text-xs font-medium outline-none"
+                                            >
+                                              <option value="">Select Correct Option</option>
+                                              {q.options.filter((o: string) => o.trim()).map((opt: string, i: number) => (
+                                                <option key={i} value={opt}>{opt}</option>
+                                              ))}
+                                            </select>
+                                          </div>
+                                        )}
+                                      </div>
+                                    ) : q.type === 'TF' ? (
+                                      <div className="flex gap-4">
+                                        {['True', 'False'].map(val => (
+                                          <button
+                                            key={val}
+                                            onClick={() => {
+                                              const updated = [...newQuestions];
+                                              updated[qIdx].answer = val;
+                                              setNewQuestions(updated);
+                                            }}
+                                            className={`flex-1 py-3 rounded-2xl font-bold text-sm transition-all ${
+                                              q.answer === val 
+                                              ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' 
+                                              : 'bg-black/5 text-black/40 hover:bg-black/10'
+                                            }`}
+                                          >
+                                            {val}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <div className="space-y-2">
+                                        <p className="text-[10px] font-bold text-black/30 uppercase tracking-widest">Correct Answer (Case Insensitive)</p>
+                                        <input 
+                                          type="text" 
+                                          placeholder="Type the correct answer here..."
+                                          value={q.answer}
+                                          onChange={e => {
+                                            const updated = [...newQuestions];
+                                            updated[qIdx].answer = e.target.value;
+                                            setNewQuestions(updated);
+                                          }}
+                                          className="w-full bg-amber-50 border border-amber-100 rounded-2xl py-4 px-5 outline-none text-sm text-amber-900 font-medium"
+                                        />
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </motion.div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <button 
+                          onClick={handleCreateTest}
+                          className="w-full bg-[#0F172A] text-white py-5 rounded-full font-bold mt-8 hover:bg-[#1E293B] transition-all shadow-xl flex items-center justify-center gap-3"
+                        >
+                          <CheckCircle2 className="w-6 h-6 text-amber-500" />
+                          {isEditingTest ? 'UPDATE ASSESSMENT' : 'PUBLISH MODULAR ASSESSMENT'}
                         </button>
-                        <button onClick={() => setAdminTab('candidates')} className="p-6 bg-blue-50 border border-blue-100 rounded-3xl text-left group hover:bg-blue-100 transition-all">
-                          <User className="w-8 h-8 text-blue-500 mb-4 group-hover:scale-110 transition-transform" />
-                          <p className="font-bold text-sm text-blue-900">Invite Candidate</p>
-                          <p className="text-[10px] text-blue-700/60">Send assessment via email</p>
-                        </button>
+                        {isEditingTest && (
+                          <button 
+                            onClick={() => {
+                              setIsEditingTest(null);
+                              setNewTestName('');
+                              setNewTestDesc('');
+                              setNewQuestions([{ question: '', type: 'MCQ', options: ['', '', '', ''], answer: '', points: 1 }]);
+                            }}
+                            className="w-full text-black/40 text-xs font-bold mt-4 hover:text-black transition-colors"
+                          >
+                            CANCEL EDITING
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
                 </motion.div>
               )}
 
-              {/* Assessments Tab */}
-              {adminTab === 'assessments' && (
-                <motion.div 
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  className="grid grid-cols-1 lg:grid-cols-3 gap-8"
-                >
-                  {/* Test List */}
-                  <div className="lg:col-span-1 space-y-6">
-                    <div className="bg-white p-8 rounded-[40px] border border-black/5 shadow-sm">
-                      <h3 className="text-xl font-serif font-medium mb-6">Existing Assessments</h3>
-                      <div className="space-y-3">
-                        {tests.map(test => (
-                          <div key={test.id} className="p-4 bg-black/[0.02] rounded-2xl border border-black/5 group hover:border-amber-500/30 transition-all">
-                            <div className="flex justify-between items-start mb-2">
-                              <div>
-                                <h4 className="font-bold text-sm">{test.name}</h4>
-                                <p className="text-[10px] text-black/30">{test.questions_count} Questions</p>
-                              </div>
-                              <div className="flex gap-1">
-                                <button 
-                                  onClick={() => editTest(test)}
-                                  className="p-1.5 text-black/20 hover:text-amber-500 transition-colors"
-                                >
-                                  <Edit2 className="w-3.5 h-3.5" />
-                                </button>
-                                <button 
-                                  onClick={async () => {
-                                    if (confirm('Delete this assessment?')) {
-                                      await fetch(`/api/tests/${test.id}`, { method: 'DELETE' });
-                                      fetchTests();
-                                    }
-                                  }}
-                                  className="p-1.5 text-black/20 hover:text-red-500 transition-colors"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className={`text-[8px] font-bold uppercase px-2 py-0.5 rounded-full ${test.is_published ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
-                                {test.is_published ? 'Published' : 'Draft'}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Test Creator */}
-                  <div className="lg:col-span-2">
-
-              {/* Candidates Tab */}
               {adminTab === 'candidates' && (
                 <motion.div 
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
-                  className="space-y-8"
+                  className="grid grid-cols-1 lg:grid-cols-3 gap-8"
                 >
-                  <div className="bg-white p-8 rounded-[40px] border border-black/5 shadow-sm">
-                      <div className="flex justify-between items-center mb-6">
-                        <h3 className="text-xl font-serif font-medium flex items-center gap-3">
-                          <User className="w-5 h-5 text-amber-500" />
-                          Candidate Pipeline
-                        </h3>
-                        <button 
-                          onClick={() => setShowAssignEmail(!showAssignEmail)}
-                          className="text-[10px] font-bold uppercase tracking-widest text-amber-600 hover:text-amber-700"
-                        >
-                          Invite by Email
-                        </button>
-                      </div>
+                  <div className="lg:col-span-2 bg-white p-8 rounded-[40px] border border-black/5 shadow-sm">
+                    <div className="flex justify-between items-center mb-8">
+                      <h3 className="text-2xl font-serif font-medium flex items-center gap-3">
+                        <User className="w-6 h-6 text-amber-500" />
+                        Candidate Pipeline
+                      </h3>
+                      <button 
+                        onClick={() => setShowAssignEmail(!showAssignEmail)}
+                        className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-[#0F172A] rounded-xl text-xs font-bold hover:bg-amber-600 transition-all"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Invite by Email
+                      </button>
+                    </div>
 
-                      {showAssignEmail && (
-                        <motion.div 
-                          initial={{ opacity: 0, y: -10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className="mb-6 p-6 bg-amber-50 rounded-3xl border border-amber-100 space-y-4"
-                        >
-                          <h4 className="text-xs font-bold text-amber-900 uppercase tracking-widest">Send Assessment Invite</h4>
-                          <form onSubmit={handleAssignByEmail} className="space-y-3">
-                            <input 
-                              type="email" 
-                              placeholder="Candidate Email"
-                              value={assignEmailForm.email}
-                              onChange={e => setAssignEmailForm({...assignEmailForm, email: e.target.value})}
-                              className="w-full bg-white border border-amber-200 rounded-xl py-3 px-4 outline-none text-sm"
-                              required
-                            />
-                            <select 
-                              value={assignEmailForm.testId}
-                              onChange={e => setAssignEmailForm({...assignEmailForm, testId: e.target.value})}
-                              className="w-full bg-white border border-amber-200 rounded-xl py-3 px-4 outline-none text-sm"
-                              required
-                            >
-                              <option value="">Select Assessment</option>
-                              {tests.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                            </select>
-                            <div className="flex gap-2">
-                              <button type="submit" className="flex-1 bg-amber-500 text-white py-3 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-amber-600 transition-all">
-                                Send Invite
-                              </button>
-                              <button type="button" onClick={() => setShowAssignEmail(false)} className="px-4 text-xs font-bold text-black/30 uppercase">Cancel</button>
+                    {showAssignEmail && (
+                      <motion.div 
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="mb-8 p-6 bg-amber-50 rounded-[32px] border border-amber-100"
+                      >
+                        <h4 className="text-xs font-bold uppercase tracking-widest text-amber-900/40 mb-4">Send Assessment Invitation</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <input 
+                            type="email" 
+                            placeholder="Candidate Email"
+                            value={assignEmailForm.email}
+                            onChange={e => setAssignEmailForm({...assignEmailForm, email: e.target.value})}
+                            className="bg-white border-none rounded-xl py-3 px-4 text-sm outline-none"
+                          />
+                          <select 
+                            value={assignEmailForm.testId}
+                            onChange={e => setAssignEmailForm({...assignEmailForm, testId: e.target.value})}
+                            className="bg-white border-none rounded-xl py-3 px-4 text-sm outline-none"
+                          >
+                            <option value="">Select Assessment</option>
+                            {tests.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                          </select>
+                          <button 
+                            onClick={handleAssignByEmail}
+                            className="bg-[#0F172A] text-white rounded-xl py-3 px-4 text-sm font-bold hover:bg-[#1E293B] transition-all"
+                          >
+                            Send Invitation
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {candidates.map(cand => (
+                        <div key={cand.id} className="p-6 bg-black/[0.02] rounded-[32px] border border-black/5 space-y-4">
+                          <div className="flex justify-between items-start">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-white rounded-2xl flex items-center justify-center shadow-sm font-serif font-bold text-amber-500">
+                                {cand.full_name.charAt(0)}
+                              </div>
+                              <div>
+                                <p className="font-bold text-sm">{cand.full_name}</p>
+                                <p className="text-[10px] text-black/30">{cand.email}</p>
+                              </div>
                             </div>
-                          </form>
-                        </motion.div>
-                      )}
-
-                      <div className="space-y-4">
-                    {candidates.map(cand => (
-                      <div key={cand.id} className="p-4 bg-black/[0.02] rounded-2xl border border-black/5 space-y-3">
-                        <div className="flex justify-between items-center">
-                          <div>
-                            <p className="font-bold text-sm">{cand.full_name}</p>
-                            <p className="text-[10px] text-black/30">{cand.email} • {cand.tests_taken} Tests</p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button 
-                              onClick={() => {
-                                setAssigningUserId(cand.id);
-                                fetchUserAssignments(cand.id);
-                              }}
-                              title="Assign Assessments"
-                              className="p-2 bg-white border border-black/5 rounded-lg hover:bg-amber-50 hover:text-amber-600 transition-all"
-                            >
-                              <Plus className="w-4 h-4" />
-                            </button>
-                            <button 
-                              onClick={() => fetchCandidateResults(cand.username)}
-                              className="p-2 bg-white border border-black/5 rounded-lg hover:bg-amber-50 hover:text-amber-600 transition-all"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
                             <select 
                               value={cand.status}
                               onChange={(e) => updateCandidateStatus(cand.username, e.target.value)}
-                              className="text-xs bg-white border border-black/10 rounded-lg px-2 py-1 outline-none"
+                              className="text-[10px] font-bold bg-white border border-black/10 rounded-lg px-2 py-1 outline-none"
                             >
                               <option value="Applied">Applied</option>
                               <option value="Shortlisted">Shortlisted</option>
@@ -1285,547 +1649,78 @@ export default function App() {
                               <option value="Rejected">Rejected</option>
                             </select>
                           </div>
-                        </div>
-                        {assigningUserId === cand.id && (
-                          <motion.div 
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="mt-4 p-4 bg-white border border-black/5 rounded-2xl space-y-4"
-                          >
-                            <div className="flex justify-between items-center">
-                              <p className="text-[10px] font-bold text-black/30 uppercase">Assign Assessments:</p>
-                              <button onClick={() => setAssigningUserId(null)} className="text-[10px] text-black/30 hover:text-black">Close</button>
+                          
+                          <div className="flex items-center justify-between pt-4 border-t border-black/5">
+                            <div className="flex gap-2">
+                              <button 
+                                onClick={() => {
+                                  setAssigningUserId(cand.id);
+                                  fetchUserAssignments(cand.id);
+                                }}
+                                className="p-2 bg-white border border-black/5 rounded-lg hover:bg-amber-50 hover:text-amber-600 transition-all"
+                              >
+                                <Plus className="w-4 h-4" />
+                              </button>
+                              <button 
+                                onClick={() => fetchCandidateResults(cand.username)}
+                                className="p-2 bg-white border border-black/5 rounded-lg hover:bg-amber-50 hover:text-amber-600 transition-all"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
                             </div>
-                            <div className="grid grid-cols-1 gap-2">
-                              {tests.map(t => (
-                                <label key={t.id} className="flex items-center justify-between p-2 hover:bg-black/5 rounded-xl cursor-pointer">
-                                  <span className="text-xs">{t.name}</span>
-                                  <input 
-                                    type="checkbox" 
-                                    checked={assignments[cand.id]?.includes(t.id)}
-                                    onChange={() => toggleAssignment(cand.id, t.id)}
-                                    className="w-4 h-4 accent-amber-500"
-                                  />
-                                </label>
-                              ))}
-                            </div>
-                          </motion.div>
-                        )}
-                        {selectedCandidateResults.length > 0 && selectedCandidateResults[0].username === cand.username && (
-                          <div className="mt-4 pt-4 border-t border-black/5 space-y-2">
-                            <p className="text-[10px] font-bold text-black/30 uppercase">Test History:</p>
-                            {selectedCandidateResults.map(r => (
-                              <div key={r.id} className="flex justify-between items-center text-[10px] bg-white p-2 rounded-lg border border-black/5">
-                                <span className="font-medium">{r.test_name}</span>
-                                <span className="font-mono font-bold">{r.score}/{r.total}</span>
-                              </div>
-                            ))}
+                            <span className="text-[10px] font-bold text-black/30 uppercase tracking-widest">{cand.tests_taken} Tests Taken</span>
                           </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
 
-              {(adminTab === 'overview' || adminTab === 'results') && (
-                <div className="bg-white p-8 rounded-[32px] border border-black/5 shadow-sm">
-                      <div className="flex justify-between items-center mb-6">
-                        <h3 className="text-xl font-serif font-medium flex items-center gap-3">
-                          <CheckCircle2 className="w-5 h-5 text-amber-500" />
-                          Assessment Results
-                        </h3>
-                        <button 
-                          onClick={exportResults}
-                          className="text-[10px] font-bold uppercase tracking-widest text-black/30 hover:text-black flex items-center gap-2"
-                        >
-                          <Download className="w-3 h-3" />
-                          Export CSV
-                        </button>
-                      </div>
-                      <div className="space-y-6">
-                    {allResults.map(res => (
-                      <div key={res.id} className="p-6 bg-black/[0.02] rounded-3xl border border-black/5 space-y-4">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <span className="font-bold text-base block">{res.full_name}</span>
-                            <span className="text-xs text-black/40">{res.test_name} • {new Date(res.timestamp).toLocaleString()}</span>
-                          </div>
-                          <div className="text-right">
-                            <span className="font-mono text-lg font-bold block">{res.score}/{res.total}</span>
-                            {res.manual_review_needed && (
-                              <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">Manual Review Needed</span>
-                            )}
-                          </div>
-                        </div>
-                        
-                        <div className="flex items-center gap-4">
-                          <div className="h-2 flex-1 bg-black/10 rounded-full overflow-hidden">
-                            <div 
-                              className="h-full bg-amber-500" 
-                              style={{ width: `${(res.score / res.total) * 100}%` }}
-                            />
-                          </div>
-                          <span className="text-[10px] font-bold text-black/30">{Math.round((res.score / res.total) * 100)}%</span>
-                        </div>
-
-                        <div className="flex items-center gap-4 text-[10px] text-black/40">
-                          <div className="flex items-center gap-1">
-                            <AlertTriangle className="w-3 h-3" />
-                            {res.tab_switches} Switches
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <MessageSquare className="w-3 h-3" />
-                            {res.feedback ? 'Feedback Sent' : 'No Feedback'}
-                          </div>
-                          <button 
-                            onClick={() => fetchResultDetail(res.id)}
-                            className="ml-auto flex items-center gap-1 text-amber-600 font-bold hover:underline"
-                          >
-                            <Eye className="w-3 h-3" />
-                            VIEW DETAILED REPORT
-                          </button>
-                        </div>
-
-                        <div className="pt-2">
-                          <textarea 
-                            placeholder="Add feedback or review comments..."
-                            defaultValue={res.feedback}
-                            onBlur={(e) => handleFeedback(res.id, e.target.value)}
-                            className="w-full bg-white border border-black/5 rounded-xl p-3 text-xs outline-none focus:ring-1 focus:ring-amber-500 transition-all"
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Right Column: Quiz Creator */}
-          {(adminTab === 'overview' || adminTab === 'assessments') && (
-                <div className="xl:col-span-2 space-y-8">
-                  <div className="bg-white p-8 rounded-[40px] border border-black/5 shadow-sm">
-                  <h3 className="text-2xl font-serif font-medium mb-8 flex items-center gap-3">
-                    <Plus className="w-6 h-6 text-amber-500" />
-                    {isEditingTest ? 'Edit Assessment' : 'Modular Quiz Creator'}
-                  </h3>
-                  
-                  <div className="space-y-6">
-                    {/* Basic Info */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="col-span-2">
-                        <label className="text-[10px] font-bold uppercase tracking-widest text-black/30 mb-2 block">Quiz Details</label>
-                        <input 
-                          type="text" 
-                          placeholder="Quiz Name"
-                          value={newTestName}
-                          onChange={e => setNewTestName(e.target.value)}
-                          className="w-full bg-black/5 border-none rounded-2xl py-4 px-5 outline-none text-sm mb-3"
-                        />
-                        <textarea 
-                          placeholder="Quiz Description"
-                          value={newTestDesc}
-                          onChange={e => setNewTestDesc(e.target.value)}
-                          className="w-full bg-black/5 border-none rounded-2xl py-4 px-5 outline-none h-24 text-sm resize-none"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Modular Configuration */}
-                    <div className="p-6 bg-black/[0.02] rounded-[32px] border border-black/5">
-                      <h4 className="text-xs font-bold uppercase tracking-widest text-black/40 mb-6 flex items-center gap-2">
-                        <Settings className="w-4 h-4" />
-                        Module Configuration
-                      </h4>
-                      <div className="grid grid-cols-2 gap-6">
-                        <div className="space-y-4">
-                          <label className="flex items-center gap-3 cursor-pointer group">
-                            <div className={`w-10 h-6 rounded-full transition-all relative ${newTestConfig.grading_enabled ? 'bg-amber-500' : 'bg-black/10'}`}>
-                              <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${newTestConfig.grading_enabled ? 'left-5' : 'left-1'}`} />
-                            </div>
-                            <input type="checkbox" className="hidden" checked={newTestConfig.grading_enabled} onChange={e => setNewTestConfig({...newTestConfig, grading_enabled: e.target.checked})} />
-                            <span className="text-xs font-medium text-black/70 group-hover:text-black">Auto Grading</span>
-                          </label>
-                          <label className="flex items-center gap-3 cursor-pointer group">
-                            <div className={`w-10 h-6 rounded-full transition-all relative ${newTestConfig.timing_enabled ? 'bg-amber-500' : 'bg-black/10'}`}>
-                              <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${newTestConfig.timing_enabled ? 'left-5' : 'left-1'}`} />
-                            </div>
-                            <input type="checkbox" className="hidden" checked={newTestConfig.timing_enabled} onChange={e => setNewTestConfig({...newTestConfig, timing_enabled: e.target.checked})} />
-                            <span className="text-xs font-medium text-black/70 group-hover:text-black">Timer Module</span>
-                          </label>
-                          <label className="flex items-center gap-3 cursor-pointer group">
-                            <div className={`w-10 h-6 rounded-full transition-all relative ${newTestConfig.randomization_enabled ? 'bg-amber-500' : 'bg-black/10'}`}>
-                              <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${newTestConfig.randomization_enabled ? 'left-5' : 'left-1'}`} />
-                            </div>
-                            <input type="checkbox" className="hidden" checked={newTestConfig.randomization_enabled} onChange={e => setNewTestConfig({...newTestConfig, randomization_enabled: e.target.checked})} />
-                            <span className="text-xs font-medium text-black/70 group-hover:text-black">Randomize Order</span>
-                          </label>
-                        </div>
-                        <div className="space-y-4">
-                          <label className="flex items-center gap-3 cursor-pointer group">
-                            <div className={`w-10 h-6 rounded-full transition-all relative ${newTestConfig.anti_cheat_enabled ? 'bg-amber-500' : 'bg-black/10'}`}>
-                              <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${newTestConfig.anti_cheat_enabled ? 'left-5' : 'left-1'}`} />
-                            </div>
-                            <input type="checkbox" className="hidden" checked={newTestConfig.anti_cheat_enabled} onChange={e => setNewTestConfig({...newTestConfig, anti_cheat_enabled: e.target.checked})} />
-                            <span className="text-xs font-medium text-black/70 group-hover:text-black">Anti-Cheat</span>
-                          </label>
-                          <label className="flex items-center gap-3 cursor-pointer group">
-                            <div className={`w-10 h-6 rounded-full transition-all relative ${newTestConfig.show_answers ? 'bg-amber-500' : 'bg-black/10'}`}>
-                              <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${newTestConfig.show_answers ? 'left-5' : 'left-1'}`} />
-                            </div>
-                            <input type="checkbox" className="hidden" checked={newTestConfig.show_answers} onChange={e => setNewTestConfig({...newTestConfig, show_answers: e.target.checked})} />
-                            <span className="text-xs font-medium text-black/70 group-hover:text-black">Show Answers</span>
-                          </label>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-bold text-black/30">Attempts:</span>
-                            <input type="number" value={newTestConfig.attempt_limit} onChange={e => setNewTestConfig({...newTestConfig, attempt_limit: Number(e.target.value)})} className="w-12 bg-white border border-black/5 rounded-lg px-2 py-1 text-xs outline-none" />
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {newTestConfig.timing_enabled && (
-                        <div className="mt-6 pt-6 border-t border-black/5 grid grid-cols-2 gap-4">
-                          <div>
-                            <label className="text-[10px] font-bold text-black/30 block mb-1">Total Time (sec)</label>
-                            <input type="number" value={newTestConfig.total_time} onChange={e => setNewTestConfig({...newTestConfig, total_time: Number(e.target.value)})} className="w-full bg-white border border-black/5 rounded-xl px-4 py-2 text-sm outline-none" />
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-bold text-black/30 block mb-1">Per Question (sec)</label>
-                            <input type="number" value={newTestConfig.per_question_time} onChange={e => setNewTestConfig({...newTestConfig, per_question_time: Number(e.target.value)})} className="w-full bg-white border border-black/5 rounded-xl px-4 py-2 text-sm outline-none" placeholder="0 = disabled" />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Question Builder */}
-                    <div className="space-y-6">
-                      <div className="flex justify-between items-center">
-                        <h4 className="text-xs font-bold uppercase tracking-widest text-black/40">Question Bank</h4>
-                        <div className="flex gap-2">
-                          <button 
-                            onClick={() => setShowBulkImport(!showBulkImport)}
-                            className="flex items-center gap-2 text-xs text-black/40 font-bold hover:bg-black/5 px-4 py-2 rounded-xl transition-all"
-                          >
-                            <Download className="w-4 h-4" />
-                            BULK IMPORT
-                          </button>
-                          <button 
-                            onClick={() => setNewQuestions([...newQuestions, { question: '', type: 'MCQ', options: ['', '', '', ''], answer: '', points: 1 }])}
-                            className="flex items-center gap-2 text-xs text-amber-600 font-bold hover:bg-amber-50 px-4 py-2 rounded-xl transition-all"
-                          >
-                            <Plus className="w-4 h-4" />
-                            ADD QUESTION
-                          </button>
-                        </div>
-                      </div>
-
-                      {showBulkImport && (
-                        <motion.div 
-                          initial={{ opacity: 0, y: -10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className="p-6 bg-black/[0.02] rounded-[32px] border border-black/5 space-y-4"
-                        >
-                          <p className="text-[10px] text-black/40">Paste a JSON array of questions. Example: <code className="bg-black/5 p-1 rounded">{'[{"question": "...", "type": "MCQ", "options": ["...", "..."], "answer": "...", "points": 1}]'}</code></p>
-                          <textarea 
-                            value={bulkImportJson}
-                            onChange={e => setBulkImportJson(e.target.value)}
-                            placeholder='[{"question": "...", "type": "MCQ", ...}]'
-                            className="w-full h-32 bg-white border border-black/5 rounded-2xl p-4 text-xs font-mono outline-none"
-                          />
-                          <div className="flex justify-end gap-3">
-                            <button onClick={() => setShowBulkImport(false)} className="text-xs text-black/30 font-bold">Cancel</button>
-                            <button onClick={handleBulkImport} className="bg-[#0F172A] text-white px-6 py-2 rounded-full text-xs font-bold">Import Questions</button>
-                          </div>
-                        </motion.div>
-                      )}
-
-                      <div className="space-y-6 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-                        {newQuestions.map((q, qIdx) => (
-                          <motion.div 
-                            layout
-                            key={qIdx} 
-                            className="p-6 bg-black/[0.02] rounded-[32px] border border-black/5 space-y-4 relative group"
-                          >
-                            <button 
-                              onClick={() => setNewQuestions(newQuestions.filter((_, i) => i !== qIdx))}
-                              className="absolute top-6 right-6 p-2 text-black/20 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                          {assigningUserId === cand.id && (
+                            <motion.div 
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              className="mt-4 p-4 bg-white border border-black/5 rounded-2xl space-y-4"
                             >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-
-                            <div className="flex gap-4">
-                              <div className="flex-1 space-y-4">
-                                <div className="flex gap-3">
-                                  <select 
-                                    value={q.type}
-                                    onChange={e => {
-                                      const updated = [...newQuestions];
-                                      updated[qIdx].type = e.target.value;
-                                      if (e.target.value === 'MATCH') {
-                                        updated[qIdx].options = { left: ['', '', ''], right: ['', '', ''] };
-                                        updated[qIdx].answer = {};
-                                      } else if (e.target.value === 'TF') {
-                                        updated[qIdx].options = ['True', 'False'];
-                                        updated[qIdx].answer = 'True';
-                                      } else if (e.target.value === 'MULTI') {
-                                        updated[qIdx].answer = [];
-                                      }
-                                      setNewQuestions(updated);
-                                    }}
-                                    className="bg-white border border-black/5 rounded-xl px-3 py-2 text-[10px] font-bold outline-none"
-                                  >
-                                    <option value="MCQ">MCQ</option>
-                                    <option value="MULTI">Multiple Select</option>
-                                    <option value="TF">True/False</option>
-                                    <option value="SHORT">Short Answer</option>
-                                    <option value="FILL">Fill in Blank</option>
-                                    <option value="MATCH">Matching</option>
-                                  </select>
-                                  <input 
-                                    type="number" 
-                                    placeholder="Pts"
-                                    value={q.points}
-                                    onChange={e => {
-                                      const updated = [...newQuestions];
-                                      updated[qIdx].points = Number(e.target.value);
-                                      setNewQuestions(updated);
-                                    }}
-                                    className="w-16 bg-white border border-black/5 rounded-xl px-3 py-2 text-[10px] font-bold outline-none"
-                                  />
-                                </div>
-                                <input 
-                                  type="text" 
-                                  placeholder={`Question ${qIdx + 1}`}
-                                  value={q.question}
-                                  onChange={e => {
-                                    const updated = [...newQuestions];
-                                    updated[qIdx].question = e.target.value;
-                                    setNewQuestions(updated);
-                                  }}
-                                  className="w-full bg-white border border-black/5 rounded-2xl py-4 px-5 outline-none text-sm font-medium"
-                                />
-                                <input 
-                                  type="text" 
-                                  placeholder="Image URL (Optional)"
-                                  value={q.image_url || ''}
-                                  onChange={e => {
-                                    const updated = [...newQuestions];
-                                    updated[qIdx].image_url = e.target.value;
-                                    setNewQuestions(updated);
-                                  }}
-                                  className="w-full bg-white border border-black/5 rounded-xl py-2 px-4 outline-none text-[10px] font-mono"
-                                />
-
-                                {/* Options based on type */}
-                                {q.type === 'MATCH' ? (
-                                  <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                      <p className="text-[10px] font-bold text-black/30">Left List</p>
-                                      {q.options.left.map((opt: string, oIdx: number) => (
-                                        <input 
-                                          key={oIdx}
-                                          type="text"
-                                          value={opt}
-                                          onChange={e => {
-                                            const updated = [...newQuestions];
-                                            updated[qIdx].options.left[oIdx] = e.target.value;
-                                            setNewQuestions(updated);
-                                          }}
-                                          className="w-full bg-white border border-black/5 rounded-xl py-2 px-3 text-xs outline-none"
-                                          placeholder={`Item ${oIdx + 1}`}
-                                        />
-                                      ))}
-                                    </div>
-                                    <div className="space-y-2">
-                                      <p className="text-[10px] font-bold text-black/30">Right List (Correct Pairs)</p>
-                                      {q.options.right.map((opt: string, oIdx: number) => (
-                                        <input 
-                                          key={oIdx}
-                                          type="text"
-                                          value={opt}
-                                          onChange={e => {
-                                            const updated = [...newQuestions];
-                                            updated[qIdx].options.right[oIdx] = e.target.value;
-                                            // Update answer automatically for matching
-                                            const leftItem = updated[qIdx].options.left[oIdx];
-                                            if (leftItem) {
-                                              updated[qIdx].answer = { ...updated[qIdx].answer, [leftItem]: e.target.value };
-                                            }
-                                            setNewQuestions(updated);
-                                          }}
-                                          className="w-full bg-amber-50 border border-amber-100 rounded-xl py-2 px-3 text-xs outline-none"
-                                          placeholder={`Match for Item ${oIdx + 1}`}
-                                        />
-                                      ))}
-                                    </div>
-                                  </div>
-                                ) : (q.type === 'MCQ' || q.type === 'MULTI') ? (
-                                  <div className="space-y-4">
-                                    <div className="grid grid-cols-2 gap-3">
-                                      {q.options.map((opt: string, oIdx: number) => (
-                                        <div key={oIdx} className="flex gap-2">
-                                          <input 
-                                            type="text" 
-                                            placeholder={`Option ${oIdx + 1}`}
-                                            value={opt}
-                                            onChange={e => {
-                                              const updated = [...newQuestions];
-                                              updated[qIdx].options[oIdx] = e.target.value;
-                                              setNewQuestions(updated);
-                                            }}
-                                            className="flex-1 bg-white border border-black/5 rounded-xl py-3 px-4 outline-none text-xs"
-                                          />
-                                          {q.type === 'MULTI' && (
-                                            <button 
-                                              onClick={() => {
-                                                const updated = [...newQuestions];
-                                                const current = updated[qIdx].answer as string[];
-                                                if (current.includes(opt)) {
-                                                  updated[qIdx].answer = current.filter(v => v !== opt);
-                                                } else {
-                                                  updated[qIdx].answer = [...current, opt];
-                                                }
-                                                setNewQuestions(updated);
-                                              }}
-                                              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
-                                                (q.answer as string[]).includes(opt)
-                                                ? 'bg-emerald-500 text-white' 
-                                                : 'bg-black/5 text-black/20'
-                                              }`}
-                                            >
-                                              <Check className="w-4 h-4" />
-                                            </button>
-                                          )}
-                                        </div>
-                                      ))}
-                                    </div>
-                                    {q.type === 'MCQ' && (
-                                      <div className="flex items-center gap-3">
-                                        <span className="text-[10px] font-bold text-black/30 uppercase tracking-widest">Correct Answer:</span>
-                                        <select 
-                                          value={q.answer}
-                                          onChange={e => {
-                                            const updated = [...newQuestions];
-                                            updated[qIdx].answer = e.target.value;
-                                            setNewQuestions(updated);
-                                          }}
-                                          className="bg-white border border-black/5 rounded-xl px-4 py-2 text-xs font-medium outline-none"
-                                        >
-                                          <option value="">Select Correct Option</option>
-                                          {q.options.filter((o: string) => o.trim()).map((opt: string, i: number) => (
-                                            <option key={i} value={opt}>{opt}</option>
-                                          ))}
-                                        </select>
-                                      </div>
-                                    )}
-                                  </div>
-                                ) : q.type === 'TF' ? (
-                                  <div className="flex gap-4">
-                                    {['True', 'False'].map(val => (
-                                      <button
-                                        key={val}
-                                        onClick={() => {
-                                          const updated = [...newQuestions];
-                                          updated[qIdx].answer = val;
-                                          setNewQuestions(updated);
-                                        }}
-                                        className={`flex-1 py-3 rounded-2xl font-bold text-sm transition-all ${
-                                          q.answer === val 
-                                          ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' 
-                                          : 'bg-black/5 text-black/40 hover:bg-black/10'
-                                        }`}
-                                      >
-                                        {val}
-                                      </button>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <div className="space-y-2">
-                                    <p className="text-[10px] font-bold text-black/30 uppercase tracking-widest">Correct Answer (Case Insensitive)</p>
-                                    <input 
-                                      type="text" 
-                                      placeholder="Type the correct answer here..."
-                                      value={q.answer}
-                                      onChange={e => {
-                                        const updated = [...newQuestions];
-                                        updated[qIdx].answer = e.target.value;
-                                        setNewQuestions(updated);
-                                      }}
-                                      className="w-full bg-amber-50 border border-amber-100 rounded-2xl py-4 px-5 outline-none text-sm text-amber-900 font-medium"
-                                    />
-                                  </div>
-                                )}
+                              <div className="flex justify-between items-center">
+                                <p className="text-[10px] font-bold text-black/30 uppercase">Assign Assessments:</p>
+                                <button onClick={() => setAssigningUserId(null)} className="text-[10px] text-black/30 hover:text-black">Close</button>
                               </div>
-                            </div>
-                          </motion.div>
-                        ))}
-                      </div>
+                              <div className="grid grid-cols-1 gap-2">
+                                {tests.map(t => (
+                                  <label key={t.id} className="flex items-center justify-between p-2 hover:bg-black/5 rounded-xl cursor-pointer">
+                                    <span className="text-xs">{t.name}</span>
+                                    <input 
+                                      type="checkbox" 
+                                      checked={assignments[cand.id]?.includes(t.id)}
+                                      onChange={() => toggleAssignment(cand.id, t.id)}
+                                      className="w-4 h-4 accent-amber-500"
+                                    />
+                                  </label>
+                                ))}
+                              </div>
+                            </motion.div>
+                          )}
+                        </div>
+                      ))}
                     </div>
-
-                    <button 
-                      onClick={handleCreateTest}
-                      className="w-full bg-[#0F172A] text-white py-5 rounded-full font-bold mt-8 hover:bg-[#1E293B] transition-all shadow-xl flex items-center justify-center gap-3"
-                    >
-                      <CheckCircle2 className="w-6 h-6 text-amber-500" />
-                      {isEditingTest ? 'UPDATE ASSESSMENT' : 'PUBLISH MODULAR ASSESSMENT'}
-                    </button>
-                    {isEditingTest && (
-                      <button 
-                        onClick={() => {
-                          setIsEditingTest(null);
-                          setNewTestName('');
-                          setNewTestDesc('');
-                          setNewQuestions([{ question: '', type: 'MCQ', options: ['', '', '', ''], answer: '', points: 1 }]);
-                        }}
-                        className="w-full text-black/40 text-xs font-bold mt-4 hover:text-black transition-colors"
-                      >
-                        CANCEL EDITING
-                      </button>
-                    )}
                   </div>
-                </div>
 
-                <div className="bg-white p-8 rounded-[32px] border border-black/5 shadow-sm">
-                  <h3 className="text-xl font-serif font-medium mb-6 flex items-center gap-3">
-                    <Settings className="w-5 h-5 text-amber-500" />
-                    Manage Assessments
-                  </h3>
-                  <div className="space-y-4">
-                    {tests.map(test => (
-                      <div key={test.id} className="p-4 bg-black/[0.02] rounded-2xl border border-black/5 flex justify-between items-center">
-                        <div>
-                          <p className="font-bold text-sm">{test.name}</p>
-                          <p className="text-[10px] text-black/30">{test.description.substring(0, 50)}...</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button 
-                            onClick={() => handleEditTest(test)}
-                            className="p-2 bg-white border border-black/5 rounded-lg hover:bg-amber-50 hover:text-amber-600 transition-all"
-                          >
-                            <Settings className="w-4 h-4" />
-                          </button>
-                          <button 
-                            onClick={async () => {
-                              if (confirm('Are you sure you want to delete this test?')) {
-                                await fetch(`/api/tests/${test.id}`, { method: 'DELETE' });
-                                fetchTests();
-                              }
-                            }}
-                            className="p-2 bg-white border border-black/5 rounded-lg hover:bg-red-50 hover:text-red-600 transition-all"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="bg-white p-8 rounded-[40px] border border-black/5 shadow-sm">
+                    <h3 className="text-xl font-serif font-medium mb-6">Candidate History</h3>
+                    <div className="space-y-4">
+                      {selectedCandidateResults.length > 0 ? (
+                        selectedCandidateResults.map(r => (
+                          <div key={r.id} className="p-4 bg-black/[0.02] rounded-2xl border border-black/5">
+                            <div className="flex justify-between items-center mb-2">
+                              <span className="text-xs font-bold">{r.test_name}</span>
+                              <span className="text-xs font-mono font-bold text-amber-600">{r.score}/{r.total}</span>
+                            </div>
+                            <p className="text-[10px] text-black/30">{new Date(r.timestamp).toLocaleDateString()}</p>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-xs text-black/30 italic">Select a candidate to view history</p>
+                      )}
+                    </div>
                   </div>
-                </div>
+                </motion.div>
               )}
-            </div>
-          </motion.div>
-        )}
 
         {view === 'instructions' && (
           <motion.div 
@@ -1943,16 +1838,6 @@ export default function App() {
                       {(idx + 1).toString().padStart(2, '0')}
                     </span>
                     <div className="flex-1 pt-2">
-                      {q.image_url && (
-                        <div className="mb-6 rounded-3xl overflow-hidden border border-black/5 bg-black/5">
-                          <img 
-                            src={q.image_url} 
-                            alt="Question visual" 
-                            className="w-full h-auto max-h-[400px] object-contain mx-auto"
-                            referrerPolicy="no-referrer"
-                          />
-                        </div>
-                      )}
                       <h3 className="text-xl md:text-2xl font-medium mb-8 leading-relaxed">
                         {q.question}
                       </h3>
@@ -2265,16 +2150,6 @@ export default function App() {
                           <div className="flex gap-4">
                             <span className="w-10 h-10 bg-black/5 rounded-2xl flex items-center justify-center text-sm font-bold shrink-0">{idx + 1}</span>
                             <div>
-                              {q.image_url && (
-                                <div className="mb-4 rounded-2xl overflow-hidden border border-black/5 bg-black/5 max-w-xs">
-                                  <img 
-                                    src={q.image_url} 
-                                    alt="Question visual" 
-                                    className="w-full h-auto object-contain"
-                                    referrerPolicy="no-referrer"
-                                  />
-                                </div>
-                              )}
                               <p className="font-serif text-lg font-medium mb-1">{q.question}</p>
                               <div className="flex items-center gap-3">
                                 <span className="text-[10px] font-bold text-black/30 uppercase tracking-widest bg-black/5 px-2 py-0.5 rounded-md">{q.type}</span>
