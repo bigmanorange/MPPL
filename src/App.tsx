@@ -1630,7 +1630,7 @@ export default function App() {
                           <div className="flex justify-between items-start">
                             <div className="flex items-center gap-3">
                               <div className="w-10 h-10 bg-white rounded-2xl flex items-center justify-center shadow-sm font-serif font-bold text-amber-500">
-                                {cand.full_name.charAt(0)}
+                                {cand.full_name?.charAt(0) || 'C'}
                               </div>
                               <div>
                                 <p className="font-bold text-sm">{cand.full_name}</p>
@@ -1721,6 +1721,249 @@ export default function App() {
                   </div>
                 </motion.div>
               )}
+
+              {adminTab === 'users' && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="grid grid-cols-1 lg:grid-cols-3 gap-8"
+                >
+                  {/* Left Column: Create User */}
+                  <div className="lg:col-span-1 space-y-8">
+                    <div className="bg-white p-8 rounded-[40px] border border-black/5 shadow-sm">
+                      <h3 className="text-xl font-serif font-medium mb-6 flex items-center gap-3">
+                        <Plus className="w-5 h-5 text-amber-500" />
+                        Create New User
+                      </h3>
+                      <form onSubmit={handleAdminCreateUser} className="space-y-4">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold uppercase tracking-widest text-black/30">Full Name</label>
+                          <input 
+                            type="text" 
+                            value={adminUserForm.full_name}
+                            onChange={e => setAdminUserForm({...adminUserForm, full_name: e.target.value})}
+                            className="w-full bg-black/5 border-none rounded-xl py-3 px-4 outline-none text-sm"
+                            required
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold uppercase tracking-widest text-black/30">Email</label>
+                          <input 
+                            type="email" 
+                            value={adminUserForm.email}
+                            onChange={e => setAdminUserForm({...adminUserForm, email: e.target.value})}
+                            className="w-full bg-black/5 border-none rounded-xl py-3 px-4 outline-none text-sm"
+                            required
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold uppercase tracking-widest text-black/30">Username</label>
+                          <input 
+                            type="text" 
+                            value={adminUserForm.username}
+                            onChange={e => setAdminUserForm({...adminUserForm, username: e.target.value})}
+                            className="w-full bg-black/5 border-none rounded-xl py-3 px-4 outline-none text-sm"
+                            required
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold uppercase tracking-widest text-black/30">Password</label>
+                          <input 
+                            type="password" 
+                            value={adminUserForm.password}
+                            onChange={e => setAdminUserForm({...adminUserForm, password: e.target.value})}
+                            className="w-full bg-black/5 border-none rounded-xl py-3 px-4 outline-none text-sm"
+                            required
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold uppercase tracking-widest text-black/30">Role</label>
+                          <select 
+                            value={adminUserForm.role}
+                            onChange={e => setAdminUserForm({...adminUserForm, role: e.target.value})}
+                            className="w-full bg-black/5 border-none rounded-xl py-3 px-4 outline-none text-sm"
+                          >
+                            <option value="candidate">Candidate</option>
+                            <option value="admin">Admin</option>
+                          </select>
+                        </div>
+                        <button type="submit" className="w-full bg-[#0F172A] text-white py-3 rounded-xl font-bold hover:bg-[#1E293B] transition-all">
+                          Create User
+                        </button>
+                      </form>
+                    </div>
+
+                    <div className="bg-white p-8 rounded-[40px] border border-black/5 shadow-sm">
+                      <h3 className="text-xl font-serif font-medium mb-6 flex items-center gap-3">
+                        <Lock className="w-5 h-5 text-amber-500" />
+                        Reset Password
+                      </h3>
+                      <form onSubmit={handleAdminChangePassword} className="space-y-4">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold uppercase tracking-widest text-black/30">Username</label>
+                          <input 
+                            type="text" 
+                            value={adminPasswordForm.username}
+                            onChange={e => setAdminPasswordForm({...adminPasswordForm, username: e.target.value})}
+                            className="w-full bg-black/5 border-none rounded-xl py-3 px-4 outline-none text-sm"
+                            required
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold uppercase tracking-widest text-black/30">New Password</label>
+                          <input 
+                            type="password" 
+                            value={adminPasswordForm.password}
+                            onChange={e => setAdminPasswordForm({...adminPasswordForm, password: e.target.value})}
+                            className="w-full bg-black/5 border-none rounded-xl py-3 px-4 outline-none text-sm"
+                            required
+                          />
+                        </div>
+                        <button type="submit" className="w-full bg-amber-500 text-[#0F172A] py-3 rounded-xl font-bold hover:bg-amber-600 transition-all">
+                          Update Password
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+
+                  {/* Right Column: User List */}
+                  <div className="lg:col-span-2 bg-white p-8 rounded-[40px] border border-black/5 shadow-sm">
+                    <h3 className="text-2xl font-serif font-medium mb-8 flex items-center gap-3">
+                      <ShieldAlert className="w-6 h-6 text-amber-500" />
+                      System Users
+                    </h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="text-left border-b border-black/5">
+                            <th className="pb-4 text-[10px] font-bold uppercase tracking-widest text-black/30">User</th>
+                            <th className="pb-4 text-[10px] font-bold uppercase tracking-widest text-black/30">Role</th>
+                            <th className="pb-4 text-[10px] font-bold uppercase tracking-widest text-black/30">Status</th>
+                            <th className="pb-4 text-[10px] font-bold uppercase tracking-widest text-black/30">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-black/5">
+                          {users.map(u => (
+                            <tr key={u.id} className="group">
+                              <td className="py-4">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 bg-black/5 rounded-lg flex items-center justify-center font-serif font-bold text-amber-500">
+                                    {u.full_name?.charAt(0) || 'U'}
+                                  </div>
+                                  <div>
+                                    <p className="text-sm font-bold">{u.full_name}</p>
+                                    <p className="text-[10px] text-black/30">{u.username}</p>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="py-4">
+                                <span className={`text-[10px] font-bold px-2 py-1 rounded-md ${u.role === 'admin' ? 'bg-rose-50 text-rose-600' : 'bg-indigo-50 text-indigo-600'}`}>
+                                  {u.role.toUpperCase()}
+                                </span>
+                              </td>
+                              <td className="py-4">
+                                <span className="text-[10px] font-bold text-black/40">{u.status || 'Active'}</span>
+                              </td>
+                              <td className="py-4">
+                                <button 
+                                  onClick={() => handleAdminDeleteUser(u.username)}
+                                  className="p-2 text-black/20 hover:text-red-500 transition-colors"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {adminTab === 'results' && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="space-y-8"
+                >
+                  <div className="bg-white p-8 rounded-[40px] border border-black/5 shadow-sm">
+                    <div className="flex justify-between items-center mb-8">
+                      <h3 className="text-2xl font-serif font-medium flex items-center gap-3">
+                        <ClipboardX className="w-6 h-6 text-amber-500" />
+                        Assessment Results
+                      </h3>
+                      <button onClick={exportResults} className="flex items-center gap-2 px-4 py-2 bg-black/5 hover:bg-black/10 rounded-xl text-xs font-bold transition-all">
+                        <Download className="w-4 h-4" />
+                        Export CSV
+                      </button>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="text-left border-b border-black/5">
+                            <th className="pb-4 text-[10px] font-bold uppercase tracking-widest text-black/30">Candidate</th>
+                            <th className="pb-4 text-[10px] font-bold uppercase tracking-widest text-black/30">Assessment</th>
+                            <th className="pb-4 text-[10px] font-bold uppercase tracking-widest text-black/30">Score</th>
+                            <th className="pb-4 text-[10px] font-bold uppercase tracking-widest text-black/30">Date</th>
+                            <th className="pb-4 text-[10px] font-bold uppercase tracking-widest text-black/30">Alerts</th>
+                            <th className="pb-4 text-[10px] font-bold uppercase tracking-widest text-black/30">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-black/5">
+                          {allResults.map(res => (
+                            <tr key={res.id} className="group hover:bg-black/[0.01] transition-colors">
+                              <td className="py-4">
+                                <p className="text-sm font-bold">{res.full_name}</p>
+                                <p className="text-[10px] text-black/30">{res.username}</p>
+                              </td>
+                              <td className="py-4">
+                                <p className="text-sm font-medium">{res.test_name}</p>
+                              </td>
+                              <td className="py-4">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-mono font-bold text-amber-600">{res.score}/{res.total}</span>
+                                  <span className="text-[10px] text-black/30">({Math.round((res.score/res.total)*100)}%)</span>
+                                </div>
+                              </td>
+                              <td className="py-4">
+                                <p className="text-xs text-black/40">{new Date(res.timestamp).toLocaleDateString()}</p>
+                              </td>
+                              <td className="py-4">
+                                {res.tab_switches > 0 ? (
+                                  <div className="flex items-center gap-1 text-rose-500">
+                                    <AlertTriangle className="w-3 h-3" />
+                                    <span className="text-[10px] font-bold">{res.tab_switches} Switches</span>
+                                  </div>
+                                ) : (
+                                  <span className="text-[10px] font-bold text-emerald-500">Clean</span>
+                                )}
+                              </td>
+                              <td className="py-4">
+                                <div className="flex items-center gap-2">
+                                  <button 
+                                    onClick={() => fetchResultDetail(res.id)}
+                                    className="p-2 bg-white border border-black/5 rounded-lg hover:bg-amber-50 hover:text-amber-600 transition-all"
+                                  >
+                                    <Eye className="w-4 h-4" />
+                                  </button>
+                                  {res.manual_review_needed && (
+                                    <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" title="Manual Review Needed" />
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </div>
+          </motion.div>
+        )}
 
         {view === 'instructions' && (
           <motion.div 
