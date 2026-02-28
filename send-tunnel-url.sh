@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Your Discord webhook URL (replace!)
-WEBHOOK_URL="https://discord.com/api/webhooks/YOUR_ID/YOUR_TOKEN_HERE"
+WEBHOOK_URL="https://discord.com/api/webhooks/1477247087254179872/x4YOjhTgouRlxtC-3cGpOtIZQeLSiCbWjLgNnwCFkyE-DWFS_59PM5Tho0ILaH7hnkWE"
 
 # Get more log lines + force refresh logs
 pm2 flush cf-tunnel >/dev/null 2>&1  # optional: clear old junk if needed
