@@ -1,20 +1,22 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# MAAVIS TALENT HUB
 
-# Run and deploy your AI Studio app
+## Project Purpose
+This project aims to provide a comprehensive platform for talent management, connecting talent with opportunities, and facilitating seamless interactions between users and organizations.
 
-This contains everything you need to run your app locally.
+## Server Setup Automation
+The server setup is automated for ease of deployment and maintenance. This ensures that all dependencies are correctly installed, configurations are handled automatically, and the environment is consistent across all deployments.
 
-View your app in AI Studio: https://ai.studio/apps/433efbf3-0a74-4e93-865d-94d779814c64
+### Automation Steps:
+1. Clone the repository.
+2. Install required packages using the provided scripts.
+3. Configure the server settings via environment variables or configuration files.
+4. Start the server using the provided scripts.
 
-## Run Locally
+## Deployment Capabilities
+This project supports flexible deployment options:
+- **Docker**: Containerize the application for consistent and isolated environments.
+- **Cloud Providers**: Deploy to AWS, Azure, or GCP using predefined configurations.
+- **On-Premise**: Setup an instance on local servers following the server setup steps provided.
 
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Conclusion
+MAAVIS TALENT HUB is designed to streamline talent management, making it easier for users to navigate opportunities and for organizations to connect with the right talent.
