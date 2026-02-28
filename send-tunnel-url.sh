@@ -16,3 +16,4 @@ fi
 curl -H "Content-Type: application/json" \
      -d "{\"content\": \"$MESSAGE\"}" \
      "$WEBHOOK_URL"
+
