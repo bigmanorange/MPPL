@@ -1,22 +1,54 @@
 # MAAVIS TALENT HUB
 
-## Project Purpose
-This project aims to provide a comprehensive platform for talent management, connecting talent with opportunities, and facilitating seamless interactions between users and organizations.
+Welcome to the **MAAVIS TALENT HUB**! This project is designed to streamline the process of connecting talents with job opportunities.
 
-## Server Setup Automation
-The server setup is automated for ease of deployment and maintenance. This ensures that all dependencies are correctly installed, configurations are handled automatically, and the environment is consistent across all deployments.
+## Badges
+![Version](https://img.shields.io/badge/version-1.0.0-blue.svg) ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
-### Automation Steps:
-1. Clone the repository.
-2. Install required packages using the provided scripts.
-3. Configure the server settings via environment variables or configuration files.
-4. Start the server using the provided scripts.
+## Features
+- **User-friendly interface**: Easy navigation through talent and job profiles.
+- **Interactive Widgets**: Engaging features to keep users involved.
+- **Real-time Updates**: Stay updated with the latest talent opportunities.
 
-## Deployment Capabilities
-This project supports flexible deployment options:
-- **Docker**: Containerize the application for consistent and isolated environments.
-- **Cloud Providers**: Deploy to AWS, Azure, or GCP using predefined configurations.
-- **On-Premise**: Setup an instance on local servers following the server setup steps provided.
+## Setup Instructions
+To run the `setup-server.sh` script, follow these steps:
 
-## Conclusion
-MAAVIS TALENT HUB is designed to streamline talent management, making it easier for users to navigate opportunities and for organizations to connect with the right talent.
+1. **Clone this Repository**:
+   ```bash
+   git clone https://github.com/maahirvirsingh123-ctrl/MPPLtesting.git
+   cd MPPLtesting
+   ```
+
+2. **Make the Script Executable**:
+   ```bash
+   chmod +x setup-server.sh
+   ```
+
+3. **Run the Setup Script**:
+   ```bash
+   ./setup-server.sh
+   ```
+
+4. **Open Your Browser**:
+   Navigate to `http://localhost:3000` to access the MAAVIS TALENT HUB.
+
+## Deployment Guide
+Follow these steps to deploy your application:
+1. Ensure all dependencies are installed:
+   ```bash
+   npm install
+   ```
+
+2. Start the server:
+   ```bash
+   npm start
+   ```
+
+3. Visit the application in your browser.
+
+### Support
+For any issues or suggestions, please open an issue on the repository or contact our support team.
+
+---
+
+**Happy Talent Searching!**
