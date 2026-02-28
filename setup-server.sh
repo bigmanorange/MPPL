@@ -43,9 +43,11 @@ echo "🚦 Starting MAAVIS TALENT HUB, Cloudflare Tunnel, and Auto-Updater..."
 DATA_DIR=~/server/data pm2 start server.ts --name "maavis-hub" --interpreter tsx
 pm2 start "cloudflared tunnel --url http://localhost:3000" --name "cf-tunnel"
 
-# Setup Auto-Updater
+# Setup Auto-Updater and URL Watcher
 chmod +x auto-update.sh
+chmod +x tunnel-url-watcher.sh
 pm2 start ./auto-update.sh --name "maavis-updater"
+pm2 start ./tunnel-url-watcher.sh --name "tunnel-watcher"
 
 # 8. Finalize
 pm2 save

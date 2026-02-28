@@ -5,6 +5,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 import bcrypt from "bcryptjs";
 import { Parser } from "json2csv";
+import nodemailer from "nodemailer";
+import crypto from "crypto";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,10 +24,25 @@ db.exec(`
     username TEXT UNIQUE,
     password_hash TEXT,
     role TEXT DEFAULT 'candidate',
-    email TEXT,
+    email TEXT UNIQUE,
     full_name TEXT,
     status TEXT DEFAULT 'Applied',
-    attempted_tests TEXT DEFAULT '[]'
+    attempted_tests TEXT DEFAULT '[]',
+    verified INTEGER DEFAULT 0,
+    verification_token TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS config (
+    key TEXT PRIMARY KEY,
+    value TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS email_invites (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT,
+    test_id INTEGER,
+    invited_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(test_id) REFERENCES tests(id)
   );
 
   CREATE TABLE IF NOT EXISTS tests (
@@ -51,6 +68,7 @@ db.exec(`
     test_id INTEGER,
     type TEXT DEFAULT 'MCQ', -- MCQ, MULTI, TF, SHORT, FILL, MATCH
     question TEXT,
+    image_url TEXT,
     options TEXT, -- JSON array of strings or objects for MATCH
     answer TEXT, -- JSON string or array
     points INTEGER DEFAULT 1,
@@ -121,26 +139,93 @@ if (userCount.count === 0) {
   insertQ.run(pmTestId, "Match the methodology with its characteristic:", JSON.stringify(matchingOptions), JSON.stringify(matchingAnswer), "MATCH");
 }
 
+// Email Transporter (Placeholder - user should configure)
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST || "smtp.gmail.com",
+  port: Number(process.env.SMTP_PORT) || 587,
+  secure: false,
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
+
+async function sendEmail(to: string, subject: string, html: string) {
+  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    console.log("📧 Email simulation (No SMTP config):", { to, subject });
+    return;
+  }
+  try {
+    await transporter.sendMail({ from: `"MAAVIS Hub" <${process.env.SMTP_USER}>`, to, subject, html });
+  } catch (err) {
+    console.error("Failed to send email:", err);
+  }
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
   app.use(express.json());
 
+  // Middleware to capture App URL
+  app.use((req, res, next) => {
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+    const host = req.headers['host'];
+    const currentUrl = `${protocol}://${host}`;
+    
+    const existingUrl = db.prepare("SELECT value FROM config WHERE key = 'app_url'").get() as any;
+    if (!existingUrl) {
+      db.prepare("INSERT INTO config (key, value) VALUES ('app_url', ?)").run(currentUrl);
+      console.log(`🌐 App URL detected and saved: ${currentUrl}`);
+    }
+    next();
+  });
+
   // Auth Routes
-  app.post("/api/register", (req, res) => {
+  app.post("/api/register", async (req, res) => {
     const { username, password, full_name, email } = req.body;
     try {
       const salt = bcrypt.genSaltSync(10);
       const hash = bcrypt.hashSync(password, salt);
-      db.prepare("INSERT INTO users (username, password_hash, full_name, email) VALUES (?, ?, ?, ?)").run(username, hash, full_name, email);
-      res.json({ success: true });
+      const token = crypto.randomBytes(32).toString('hex');
+      
+      const result = db.prepare("INSERT INTO users (username, password_hash, full_name, email, verification_token) VALUES (?, ?, ?, ?, ?)").run(username, hash, full_name, email, token);
+      const userId = result.lastInsertRowid;
+
+      // Check for pending invites
+      const invites = db.prepare("SELECT test_id FROM email_invites WHERE email = ?").all(email) as any[];
+      for (const invite of invites) {
+        db.prepare("INSERT OR IGNORE INTO assignments (user_id, test_id) VALUES (?, ?)").run(userId, invite.test_id);
+      }
+      db.prepare("DELETE FROM email_invites WHERE email = ?").run(email);
+
+      // Send verification email
+      const appUrl = (db.prepare("SELECT value FROM config WHERE key = 'app_url'").get() as any)?.value || `http://localhost:3000`;
+      await sendEmail(email, "Verify your MAAVIS account", `
+        <h1>Welcome to MAAVIS Talent Hub</h1>
+        <p>Please verify your email by clicking the link below:</p>
+        <a href="${appUrl}/api/verify?token=${token}">Verify Email</a>
+      `);
+
+      res.json({ success: true, message: "Registration successful. Please check your email for verification." });
     } catch (err: any) {
       if (err.code === 'SQLITE_CONSTRAINT') {
-        res.status(400).json({ error: "Username already exists" });
+        res.status(400).json({ error: "Username or Email already exists" });
       } else {
-        res.status(500).json({ error: "Registration failed" });
+        res.status(500).json({ error: "Registration failed: " + err.message });
       }
+    }
+  });
+
+  app.get("/api/verify", (req, res) => {
+    const { token } = req.query;
+    const user = db.prepare("SELECT id FROM users WHERE verification_token = ?").get(token) as any;
+    if (user) {
+      db.prepare("UPDATE users SET verified = 1, verification_token = NULL WHERE id = ?").run(user.id);
+      res.send("<h1>Email Verified!</h1><p>You can now log in to the MAAVIS Talent Hub.</p><a href='/'>Go to Login</a>");
+    } else {
+      res.status(400).send("Invalid or expired token.");
     }
   });
 
@@ -149,6 +234,9 @@ async function startServer() {
     const user = db.prepare("SELECT * FROM users WHERE username = ?").get(username) as any;
 
     if (user && bcrypt.compareSync(password, user.password_hash)) {
+      if (user.role === 'candidate' && user.verified === 0) {
+        return res.status(403).json({ error: "Please verify your email before logging in." });
+      }
       res.json({ 
         success: true, 
         id: user.id,
@@ -238,13 +326,35 @@ async function startServer() {
   });
 
   // Assignment Routes
-  app.post("/api/assignments", (req, res) => {
-    const { user_id, test_id } = req.body;
+  app.post("/api/assignments", async (req, res) => {
+    const { user_id, test_id, email } = req.body;
     try {
+      if (email) {
+        // Assign by email
+        const user = db.prepare("SELECT id FROM users WHERE email = ?").get(email) as any;
+        if (user) {
+          db.prepare("INSERT OR IGNORE INTO assignments (user_id, test_id) VALUES (?, ?)").run(user.id, test_id);
+        } else {
+          db.prepare("INSERT INTO email_invites (email, test_id) VALUES (?, ?)").run(email, test_id);
+        }
+
+        const test = db.prepare("SELECT name FROM tests WHERE id = ?").get(test_id) as any;
+        const appUrl = (db.prepare("SELECT value FROM config WHERE key = 'app_url'").get() as any)?.value || `http://localhost:3000`;
+        
+        await sendEmail(email, "Assessment Assigned: " + test.name, `
+          <h1>Assessment Assigned</h1>
+          <p>You have been assigned the assessment: <strong>${test.name}</strong></p>
+          <p>Please log in or register at the link below to start:</p>
+          <a href="${appUrl}">Go to MAAVIS Talent Hub</a>
+        `);
+        
+        return res.json({ success: true, message: "Invite sent to " + email });
+      }
+
       db.prepare("INSERT OR IGNORE INTO assignments (user_id, test_id) VALUES (?, ?)").run(user_id, test_id);
       res.json({ success: true });
     } catch (err: any) {
-      res.status(500).json({ error: "Assignment failed" });
+      res.status(500).json({ error: "Assignment failed: " + err.message });
     }
   });
 
@@ -336,11 +446,11 @@ async function startServer() {
       attempt_limit || 1, show_answers ? 1 : 0, total_time || 300, per_question_time || 0
     ).lastInsertRowid;
 
-    const insertQ = db.prepare("INSERT INTO questions (test_id, question, options, answer, type, points) VALUES (?, ?, ?, ?, ?, ?)");
+    const insertQ = db.prepare("INSERT INTO questions (test_id, question, image_url, options, answer, type, points) VALUES (?, ?, ?, ?, ?, ?, ?)");
     
     questions.forEach((q: any) => {
       insertQ.run(
-        testId, q.question, 
+        testId, q.question, q.image_url || null,
         q.options ? JSON.stringify(q.options) : null, 
         typeof q.answer === 'string' ? q.answer : JSON.stringify(q.answer),
         q.type || 'MCQ',
@@ -378,11 +488,11 @@ async function startServer() {
 
     // Refresh questions
     db.prepare("DELETE FROM questions WHERE test_id = ?").run(req.params.id);
-    const insertQ = db.prepare("INSERT INTO questions (test_id, question, options, answer, type, points) VALUES (?, ?, ?, ?, ?, ?)");
+    const insertQ = db.prepare("INSERT INTO questions (test_id, question, image_url, options, answer, type, points) VALUES (?, ?, ?, ?, ?, ?, ?)");
     
     questions.forEach((q: any) => {
       insertQ.run(
-        req.params.id, q.question, 
+        req.params.id, q.question, q.image_url || null,
         q.options ? JSON.stringify(q.options) : null, 
         typeof q.answer === 'string' ? q.answer : JSON.stringify(q.answer),
         q.type || 'MCQ',

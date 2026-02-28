@@ -29,6 +29,7 @@ import {
 interface Question {
   id: number;
   question: string;
+  image_url?: string;
   type: 'MCQ' | 'MULTI' | 'TF' | 'SHORT' | 'FILL' | 'MATCH';
   options: any;
   points: number;
@@ -85,6 +86,7 @@ interface Candidate {
 
 export default function App() {
   const [view, setView] = useState<'login' | 'register' | 'dashboard' | 'admin' | 'instructions' | 'test' | 'result'>('login');
+  const [adminTab, setAdminTab] = useState<'overview' | 'assessments' | 'candidates' | 'users' | 'results'>('overview');
   const [userRole, setUserRole] = useState<'candidate' | 'admin'>('candidate');
   const [username, setUsername] = useState('');
   const [fullName, setFullName] = useState('');
@@ -121,6 +123,11 @@ export default function App() {
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [assignments, setAssignments] = useState<{[key: number]: number[]}>({});
   const [assigningUserId, setAssigningUserId] = useState<number | null>(null);
+  const [assignEmailForm, setAssignEmailForm] = useState({ email: '', testId: '' });
+  const [showAssignEmail, setShowAssignEmail] = useState(false);
+  const [quickAssignEmail, setQuickAssignEmail] = useState('');
+  const [quickAssignTestId, setQuickAssignTestId] = useState<number | null>(null);
+  const [isAssigningByEmail, setIsAssigningByEmail] = useState(false);
   
   // Admin Create Test State
   const [newTestName, setNewTestName] = useState('');
@@ -155,8 +162,8 @@ export default function App() {
       });
       const data = await res.json();
       if (res.ok) {
-        setSuccess('Registration successful! Please login.');
-        setView('login');
+        setSuccess(data.message || 'Registration successful! Please check your email to verify your account.');
+        // Don't switch view immediately, let them see the success message
       } else {
         setError(data.error || 'Registration failed');
       }
@@ -192,11 +199,50 @@ export default function App() {
     });
   };
 
-  const handleMatching = (qId: number, left: string, right: string) => {
-    const newPairs = { ...matchingPairs, [left]: right };
-    setMatchingPairs(newPairs);
-    handleAnswer(qId, newPairs);
-    setSelectedLeft(null);
+  const handleAssignByEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!assignEmailForm.email || !assignEmailForm.testId) return;
+    try {
+      const res = await fetch('/api/assignments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: assignEmailForm.email, test_id: Number(assignEmailForm.testId) }),
+      });
+      if (res.ok) {
+        setAssignEmailForm({ email: '', testId: '' });
+        setShowAssignEmail(false);
+        alert('Invite sent successfully!');
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to send invite');
+      }
+    } catch (err) {
+      alert('Connection error');
+    }
+  };
+
+  const handleQuickAssign = async () => {
+    if (!quickAssignEmail || !quickAssignTestId) return;
+    setIsAssigningByEmail(true);
+    try {
+      const res = await fetch('/api/assignments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: quickAssignEmail, test_id: quickAssignTestId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSuccess(`Invite sent to ${quickAssignEmail}`);
+        setQuickAssignEmail('');
+        setTimeout(() => setSuccess(''), 3000);
+      } else {
+        setError(data.error || 'Assignment failed');
+      }
+    } catch (err) {
+      setError('Connection error');
+    } finally {
+      setIsAssigningByEmail(false);
+    }
   };
 
   const exportResults = () => {
@@ -972,7 +1018,7 @@ export default function App() {
             animate={{ opacity: 1 }}
             className="max-w-7xl mx-auto py-12 px-4"
           >
-            <div className="flex justify-between items-center mb-12 bg-[#0F172A] p-8 rounded-[40px] shadow-xl">
+            <div className="flex flex-col md:flex-row justify-between items-center mb-12 bg-[#0F172A] p-8 rounded-[40px] shadow-xl gap-6">
               <div className="flex items-center gap-6">
                 <div className="w-16 h-16 bg-white rounded-3xl flex items-center justify-center shadow-lg">
                   <span className="text-3xl font-serif font-black text-[#0F172A] italic">M</span>
@@ -982,6 +1028,30 @@ export default function App() {
                   <p className="text-amber-500/80 text-sm font-mono tracking-widest uppercase">Modular Assessment Platform</p>
                 </div>
               </div>
+              
+              <div className="flex flex-wrap justify-center gap-2 bg-white/5 p-2 rounded-3xl">
+                {[
+                  { id: 'overview', label: 'Overview', icon: Layers },
+                  { id: 'assessments', label: 'Assessments', icon: CheckSquare },
+                  { id: 'candidates', label: 'Candidates', icon: User },
+                  { id: 'users', label: 'Users', icon: ShieldAlert },
+                  { id: 'results', label: 'Results', icon: ClipboardX },
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setAdminTab(tab.id as any)}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl transition-all text-xs font-bold ${
+                      adminTab === tab.id 
+                      ? 'bg-amber-500 text-[#0F172A] shadow-lg shadow-amber-500/20' 
+                      : 'text-white/60 hover:text-white hover:bg-white/10'
+                    }`}
+                  >
+                    <tab.icon className="w-4 h-4" />
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
               <div className="flex gap-4">
                 <button 
                   onClick={() => setShowProfileSettings(!showProfileSettings)}
@@ -989,187 +1059,196 @@ export default function App() {
                 >
                   <Settings className="w-6 h-6" />
                 </button>
-                <button 
-                  onClick={() => setShowUserManagement(!showUserManagement)}
-                  className={`flex items-center gap-2 px-6 py-3 rounded-2xl transition-all font-medium ${showUserManagement ? 'bg-amber-500 text-[#0F172A]' : 'bg-white/10 hover:bg-white/20 text-white'}`}
-                >
-                  <User className="w-5 h-5" />
-                  User Management
-                </button>
-                <button 
-                  onClick={exportResults}
-                  className="flex items-center gap-2 px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-2xl transition-all font-medium"
-                >
-                  <Download className="w-5 h-5" />
-                  Export CSV
-                </button>
                 <button onClick={() => setView('login')} className="p-4 bg-white/10 hover:bg-white/20 rounded-2xl transition-colors text-white">
                   <LogOut className="w-6 h-6" />
                 </button>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
-              {showProfileSettings && (
+            <div className="space-y-8">
+              {/* Overview Tab */}
+              {adminTab === 'overview' && (
                 <motion.div 
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  className="col-span-full bg-white p-8 rounded-[40px] border border-black/5 shadow-sm mb-8 max-w-md mx-auto"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="space-y-8"
                 >
-                  <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-xl font-serif font-medium">Admin Profile Settings</h3>
-                    <button onClick={() => setShowProfileSettings(false)} className="text-black/30 hover:text-black">Close</button>
-                  </div>
-                  <form onSubmit={handleSelfChangePassword} className="space-y-4">
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold uppercase tracking-widest text-black/30">New Password</label>
-                      <input 
-                        type="password" 
-                        value={newPassword}
-                        onChange={e => setNewPassword(e.target.value)}
-                        className="w-full bg-black/5 border-none rounded-xl py-3 px-4 outline-none text-sm"
-                        required
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold uppercase tracking-widest text-black/30">Confirm Password</label>
-                      <input 
-                        type="password" 
-                        value={confirmPassword}
-                        onChange={e => setConfirmPassword(e.target.value)}
-                        className="w-full bg-black/5 border-none rounded-xl py-3 px-4 outline-none text-sm"
-                        required
-                      />
-                    </div>
-                    <button type="submit" className="w-full bg-[#0F172A] text-white py-3 rounded-xl font-bold hover:bg-[#1E293B] transition-all">
-                      Update Admin Password
-                    </button>
-                  </form>
-                </motion.div>
-              )}
-
-              {showUserManagement && (
-                <motion.div 
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  className="col-span-full bg-white p-8 rounded-[40px] border border-black/5 shadow-sm mb-8"
-                >
-                  <div className="flex justify-between items-center mb-8">
-                    <h3 className="text-2xl font-serif font-medium flex items-center gap-3">
-                      <User className="w-6 h-6 text-amber-500" />
-                      User & Access Management
-                    </h3>
-                    <button onClick={() => setShowUserManagement(false)} className="text-black/30 hover:text-black">Close</button>
-                  </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-                    {/* Create User Form */}
-                    <div className="space-y-6">
-                      <h4 className="text-xs font-bold uppercase tracking-widest text-black/40">Create New User</h4>
-                      <form onSubmit={handleAdminCreateUser} className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                          <input 
-                            type="text" 
-                            placeholder="Username"
-                            value={adminUserForm.username}
-                            onChange={e => setAdminUserForm({...adminUserForm, username: e.target.value})}
-                            className="w-full bg-black/5 border-none rounded-2xl py-4 px-5 outline-none text-sm"
-                            required
-                          />
-                          <input 
-                            type="password" 
-                            placeholder="Password"
-                            value={adminUserForm.password}
-                            onChange={e => setAdminUserForm({...adminUserForm, password: e.target.value})}
-                            className="w-full bg-black/5 border-none rounded-2xl py-4 px-5 outline-none text-sm"
-                            required
-                          />
+                  {/* Stats Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    {[
+                      { label: 'Total Candidates', value: candidates.length, icon: User, color: 'text-blue-500', bg: 'bg-blue-50' },
+                      { label: 'Active Assessments', value: tests.length, icon: CheckSquare, color: 'text-amber-500', bg: 'bg-amber-50' },
+                      { label: 'Total Results', value: allResults.length, icon: ClipboardX, color: 'text-emerald-500', bg: 'bg-emerald-50' },
+                      { label: 'Avg. Performance', value: allResults.length > 0 ? `${Math.round((allResults.reduce((acc, r) => acc + (r.score / r.total), 0) / allResults.length) * 100)}%` : '0%', icon: Layers, color: 'text-purple-500', bg: 'bg-purple-50' },
+                    ].map((stat, i) => (
+                      <div key={i} className="bg-white p-6 rounded-[32px] border border-black/5 shadow-sm flex items-center gap-4">
+                        <div className={`w-12 h-12 ${stat.bg} ${stat.color} rounded-2xl flex items-center justify-center`}>
+                          <stat.icon className="w-6 h-6" />
                         </div>
-                        <input 
-                          type="text" 
-                          placeholder="Full Name"
-                          value={adminUserForm.full_name}
-                          onChange={e => setAdminUserForm({...adminUserForm, full_name: e.target.value})}
-                          className="w-full bg-black/5 border-none rounded-2xl py-4 px-5 outline-none text-sm"
-                          required
-                        />
-                        <input 
-                          type="email" 
-                          placeholder="Email Address"
-                          value={adminUserForm.email}
-                          onChange={e => setAdminUserForm({...adminUserForm, email: e.target.value})}
-                          className="w-full bg-black/5 border-none rounded-2xl py-4 px-5 outline-none text-sm"
-                          required
-                        />
-                        <select 
-                          value={adminUserForm.role}
-                          onChange={e => setAdminUserForm({...adminUserForm, role: e.target.value})}
-                          className="w-full bg-black/5 border-none rounded-2xl py-4 px-5 outline-none text-sm"
-                        >
-                          <option value="candidate">Candidate</option>
-                          <option value="admin">Administrator</option>
-                        </select>
-                        <button type="submit" className="w-full bg-[#0F172A] text-white py-4 rounded-full font-bold hover:bg-[#1E293B] transition-all">
-                          Create User Account
-                        </button>
-                      </form>
-                    </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-black/30 uppercase tracking-widest">{stat.label}</p>
+                          <p className="text-2xl font-serif font-bold">{stat.value}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
 
-                    {/* Change Password Form */}
-                    <div className="space-y-6">
-                      <h4 className="text-xs font-bold uppercase tracking-widest text-black/40">Reset User Password</h4>
-                      <form onSubmit={handleAdminChangePassword} className="space-y-4">
-                        <input 
-                          type="text" 
-                          placeholder="Target Username"
-                          value={adminPasswordForm.username}
-                          onChange={e => setAdminPasswordForm({...adminPasswordForm, username: e.target.value})}
-                          className="w-full bg-black/5 border-none rounded-2xl py-4 px-5 outline-none text-sm"
-                          required
-                        />
-                        <input 
-                          type="password" 
-                          placeholder="New Password"
-                          value={adminPasswordForm.password}
-                          onChange={e => setAdminPasswordForm({...adminPasswordForm, password: e.target.value})}
-                          className="w-full bg-black/5 border-none rounded-2xl py-4 px-5 outline-none text-sm"
-                          required
-                        />
-                        <button type="submit" className="w-full bg-amber-500 text-[#0F172A] py-4 rounded-full font-bold hover:bg-amber-600 transition-all">
-                          Update Password
-                        </button>
-                      </form>
-
-                      <div className="pt-8 border-t border-black/5">
-                        <h4 className="text-xs font-bold uppercase tracking-widest text-black/40 mb-4">Quick Actions</h4>
-                        <div className="flex flex-wrap gap-2">
-                          {users.map(u => (
-                            <div key={u.id} className="flex items-center gap-2 bg-black/5 px-3 py-2 rounded-xl text-xs">
-                              <span className="font-medium">{u.username}</span>
-                              <span className="text-[8px] uppercase text-black/30">{u.role}</span>
-                              <button 
-                                onClick={() => handleAdminDeleteUser(u.username)}
-                                className="text-red-500 hover:text-red-700"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </button>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    {/* Recent Activity */}
+                    <div className="bg-white p-8 rounded-[40px] border border-black/5 shadow-sm">
+                      <h3 className="text-xl font-serif font-medium mb-6">Recent Assessment Activity</h3>
+                      <div className="space-y-4">
+                        {allResults.slice(0, 5).map(res => (
+                          <div key={res.id} className="flex items-center justify-between p-4 bg-black/[0.02] rounded-2xl border border-black/5">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm">
+                                <User className="w-5 h-5 text-black/20" />
+                              </div>
+                              <div>
+                                <p className="text-sm font-bold">{res.full_name}</p>
+                                <p className="text-[10px] text-black/30">{res.test_name}</p>
+                              </div>
                             </div>
-                          ))}
-                        </div>
+                            <div className="text-right">
+                              <p className="text-sm font-mono font-bold">{res.score}/{res.total}</p>
+                              <p className="text-[8px] text-black/30 uppercase">{new Date(res.timestamp).toLocaleDateString()}</p>
+                            </div>
+                          </div>
+                        ))}
+                        {allResults.length === 0 && <p className="text-center py-8 text-black/20 text-sm">No recent activity found.</p>}
+                      </div>
+                    </div>
+
+                    {/* Quick Actions */}
+                    <div className="bg-white p-8 rounded-[40px] border border-black/5 shadow-sm">
+                      <h3 className="text-xl font-serif font-medium mb-6">Quick Management</h3>
+                      <div className="grid grid-cols-2 gap-4">
+                        <button onClick={() => setAdminTab('assessments')} className="p-6 bg-amber-50 border border-amber-100 rounded-3xl text-left group hover:bg-amber-100 transition-all">
+                          <Plus className="w-8 h-8 text-amber-500 mb-4 group-hover:scale-110 transition-transform" />
+                          <p className="font-bold text-sm text-amber-900">Create Test</p>
+                          <p className="text-[10px] text-amber-700/60">Build a new assessment module</p>
+                        </button>
+                        <button onClick={() => setAdminTab('candidates')} className="p-6 bg-blue-50 border border-blue-100 rounded-3xl text-left group hover:bg-blue-100 transition-all">
+                          <User className="w-8 h-8 text-blue-500 mb-4 group-hover:scale-110 transition-transform" />
+                          <p className="font-bold text-sm text-blue-900">Invite Candidate</p>
+                          <p className="text-[10px] text-blue-700/60">Send assessment via email</p>
+                        </button>
                       </div>
                     </div>
                   </div>
                 </motion.div>
               )}
 
-              {/* Left Column: Pipeline & Results */}
-              <div className="xl:col-span-2 space-y-8">
-                <div className="bg-white p-8 rounded-[32px] border border-black/5 shadow-sm">
-                  <h3 className="text-xl font-serif font-medium mb-6 flex items-center gap-3">
-                    <User className="w-5 h-5 text-amber-500" />
-                    Candidate Pipeline
-                  </h3>
-                  <div className="space-y-4">
+              {/* Assessments Tab */}
+              {adminTab === 'assessments' && (
+                <motion.div 
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="grid grid-cols-1 lg:grid-cols-3 gap-8"
+                >
+                  {/* Test List */}
+                  <div className="lg:col-span-1 space-y-6">
+                    <div className="bg-white p-8 rounded-[40px] border border-black/5 shadow-sm">
+                      <h3 className="text-xl font-serif font-medium mb-6">Existing Assessments</h3>
+                      <div className="space-y-3">
+                        {tests.map(test => (
+                          <div key={test.id} className="p-4 bg-black/[0.02] rounded-2xl border border-black/5 group hover:border-amber-500/30 transition-all">
+                            <div className="flex justify-between items-start mb-2">
+                              <div>
+                                <h4 className="font-bold text-sm">{test.name}</h4>
+                                <p className="text-[10px] text-black/30">{test.questions_count} Questions</p>
+                              </div>
+                              <div className="flex gap-1">
+                                <button 
+                                  onClick={() => editTest(test)}
+                                  className="p-1.5 text-black/20 hover:text-amber-500 transition-colors"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button 
+                                  onClick={async () => {
+                                    if (confirm('Delete this assessment?')) {
+                                      await fetch(`/api/tests/${test.id}`, { method: 'DELETE' });
+                                      fetchTests();
+                                    }
+                                  }}
+                                  className="p-1.5 text-black/20 hover:text-red-500 transition-colors"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className={`text-[8px] font-bold uppercase px-2 py-0.5 rounded-full ${test.is_published ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
+                                {test.is_published ? 'Published' : 'Draft'}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Test Creator */}
+                  <div className="lg:col-span-2">
+
+              {/* Candidates Tab */}
+              {adminTab === 'candidates' && (
+                <motion.div 
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="space-y-8"
+                >
+                  <div className="bg-white p-8 rounded-[40px] border border-black/5 shadow-sm">
+                      <div className="flex justify-between items-center mb-6">
+                        <h3 className="text-xl font-serif font-medium flex items-center gap-3">
+                          <User className="w-5 h-5 text-amber-500" />
+                          Candidate Pipeline
+                        </h3>
+                        <button 
+                          onClick={() => setShowAssignEmail(!showAssignEmail)}
+                          className="text-[10px] font-bold uppercase tracking-widest text-amber-600 hover:text-amber-700"
+                        >
+                          Invite by Email
+                        </button>
+                      </div>
+
+                      {showAssignEmail && (
+                        <motion.div 
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="mb-6 p-6 bg-amber-50 rounded-3xl border border-amber-100 space-y-4"
+                        >
+                          <h4 className="text-xs font-bold text-amber-900 uppercase tracking-widest">Send Assessment Invite</h4>
+                          <form onSubmit={handleAssignByEmail} className="space-y-3">
+                            <input 
+                              type="email" 
+                              placeholder="Candidate Email"
+                              value={assignEmailForm.email}
+                              onChange={e => setAssignEmailForm({...assignEmailForm, email: e.target.value})}
+                              className="w-full bg-white border border-amber-200 rounded-xl py-3 px-4 outline-none text-sm"
+                              required
+                            />
+                            <select 
+                              value={assignEmailForm.testId}
+                              onChange={e => setAssignEmailForm({...assignEmailForm, testId: e.target.value})}
+                              className="w-full bg-white border border-amber-200 rounded-xl py-3 px-4 outline-none text-sm"
+                              required
+                            >
+                              <option value="">Select Assessment</option>
+                              {tests.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                            </select>
+                            <div className="flex gap-2">
+                              <button type="submit" className="flex-1 bg-amber-500 text-white py-3 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-amber-600 transition-all">
+                                Send Invite
+                              </button>
+                              <button type="button" onClick={() => setShowAssignEmail(false)} className="px-4 text-xs font-bold text-black/30 uppercase">Cancel</button>
+                            </div>
+                          </form>
+                        </motion.div>
+                      )}
+
+                      <div className="space-y-4">
                     {candidates.map(cand => (
                       <div key={cand.id} className="p-4 bg-black/[0.02] rounded-2xl border border-black/5 space-y-3">
                         <div className="flex justify-between items-center">
@@ -1247,13 +1326,24 @@ export default function App() {
                     ))}
                   </div>
                 </div>
+              )}
 
+              {(adminTab === 'overview' || adminTab === 'results') && (
                 <div className="bg-white p-8 rounded-[32px] border border-black/5 shadow-sm">
-                  <h3 className="text-xl font-serif font-medium mb-6 flex items-center gap-3">
-                    <CheckCircle2 className="w-5 h-5 text-amber-500" />
-                    Assessment Results
-                  </h3>
-                  <div className="space-y-6">
+                      <div className="flex justify-between items-center mb-6">
+                        <h3 className="text-xl font-serif font-medium flex items-center gap-3">
+                          <CheckCircle2 className="w-5 h-5 text-amber-500" />
+                          Assessment Results
+                        </h3>
+                        <button 
+                          onClick={exportResults}
+                          className="text-[10px] font-bold uppercase tracking-widest text-black/30 hover:text-black flex items-center gap-2"
+                        >
+                          <Download className="w-3 h-3" />
+                          Export CSV
+                        </button>
+                      </div>
+                      <div className="space-y-6">
                     {allResults.map(res => (
                       <div key={res.id} className="p-6 bg-black/[0.02] rounded-3xl border border-black/5 space-y-4">
                         <div className="flex justify-between items-start">
@@ -1309,11 +1399,14 @@ export default function App() {
                     ))}
                   </div>
                 </div>
-              </div>
+              )}
+            </div>
+          )}
 
-              {/* Right Column: Quiz Creator */}
-              <div className="xl:col-span-2 space-y-8">
-                <div className="bg-white p-8 rounded-[40px] border border-black/5 shadow-sm">
+          {/* Right Column: Quiz Creator */}
+          {(adminTab === 'overview' || adminTab === 'assessments') && (
+                <div className="xl:col-span-2 space-y-8">
+                  <div className="bg-white p-8 rounded-[40px] border border-black/5 shadow-sm">
                   <h3 className="text-2xl font-serif font-medium mb-8 flex items-center gap-3">
                     <Plus className="w-6 h-6 text-amber-500" />
                     {isEditingTest ? 'Edit Assessment' : 'Modular Quiz Creator'}
@@ -1512,6 +1605,17 @@ export default function App() {
                                     setNewQuestions(updated);
                                   }}
                                   className="w-full bg-white border border-black/5 rounded-2xl py-4 px-5 outline-none text-sm font-medium"
+                                />
+                                <input 
+                                  type="text" 
+                                  placeholder="Image URL (Optional)"
+                                  value={q.image_url || ''}
+                                  onChange={e => {
+                                    const updated = [...newQuestions];
+                                    updated[qIdx].image_url = e.target.value;
+                                    setNewQuestions(updated);
+                                  }}
+                                  className="w-full bg-white border border-black/5 rounded-xl py-2 px-4 outline-none text-[10px] font-mono"
                                 />
 
                                 {/* Options based on type */}
@@ -1718,7 +1822,7 @@ export default function App() {
                     ))}
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           </motion.div>
         )}
@@ -1839,6 +1943,16 @@ export default function App() {
                       {(idx + 1).toString().padStart(2, '0')}
                     </span>
                     <div className="flex-1 pt-2">
+                      {q.image_url && (
+                        <div className="mb-6 rounded-3xl overflow-hidden border border-black/5 bg-black/5">
+                          <img 
+                            src={q.image_url} 
+                            alt="Question visual" 
+                            className="w-full h-auto max-h-[400px] object-contain mx-auto"
+                            referrerPolicy="no-referrer"
+                          />
+                        </div>
+                      )}
                       <h3 className="text-xl md:text-2xl font-medium mb-8 leading-relaxed">
                         {q.question}
                       </h3>
@@ -2151,6 +2265,16 @@ export default function App() {
                           <div className="flex gap-4">
                             <span className="w-10 h-10 bg-black/5 rounded-2xl flex items-center justify-center text-sm font-bold shrink-0">{idx + 1}</span>
                             <div>
+                              {q.image_url && (
+                                <div className="mb-4 rounded-2xl overflow-hidden border border-black/5 bg-black/5 max-w-xs">
+                                  <img 
+                                    src={q.image_url} 
+                                    alt="Question visual" 
+                                    className="w-full h-auto object-contain"
+                                    referrerPolicy="no-referrer"
+                                  />
+                                </div>
+                              )}
                               <p className="font-serif text-lg font-medium mb-1">{q.question}</p>
                               <div className="flex items-center gap-3">
                                 <span className="text-[10px] font-bold text-black/30 uppercase tracking-widest bg-black/5 px-2 py-0.5 rounded-md">{q.type}</span>
