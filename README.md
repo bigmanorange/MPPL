@@ -1,109 +1,102 @@
+
+---
+
 # MAAVIS TALENT HUB
 
 Welcome to **MAAVIS TALENT HUB**.  
-This project is designed to streamline the process of connecting talents with job opportunities efficiently and professionally.
+This project is designed to streamline the process of connecting talents with job opportunities efficiently.
 
 ---
+
 ## Badges
 
 ![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
 ---
+
 ## Features
 
 - **User-friendly Interface**  
-  Easy navigation through talent and job profiles.
-
 - **Interactive Widgets**  
-  Engaging features to enhance user experience.
-
 - **Real-time Updates**  
-  Stay updated with the latest talent opportunities instantly.
+- **Automated Setup Script**
 
 ---
-## Setup Instructions
 
-Follow these steps to run the project locally:
+## Quick Setup (Recommended)
 
-### 1. Clone the Repository
+You only need the `setup-server.sh` file.
+
+### 1. Download the Script
+
+Download `setup-server.sh` from this repository.
+
+Or use curl:
 
 ```bash
-git clone https://github.com/maahirvirsingh123-ctrl/MPPLtesting.git
-cd MPPLtesting
+curl -O https://raw.githubusercontent.com/maahirvirsingh123-ctrl/MPPLtesting/main/setup-server.sh
 ````
 
-### 2. Make the Script Executable
+---
+
+### 2. Make It Executable
 
 ```bash
 chmod +x setup-server.sh
 ```
 
-### 3. Run the Setup Script
+---
+
+### 3. Run the Script
 
 ```bash
 ./setup-server.sh
 ```
 
-### 4. Open in Browser
+The script will:
 
-Navigate to:
+- Install required dependencies
+    
+- Configure the environment
+    
+- Start the development server automatically
+    
 
-```
-http://localhost:3000
-```
 
 ---
 
-## Deployment Guide
+## Manual Setup (Optional)
 
-To manually deploy and start the application:
-
-### 1. Install Dependencies
+If you prefer to run it manually:
 
 ```bash
 npm install
-```
-
-### 2. Start the Server
-
-```bash
 npm start
-```
-
-### 3. Access the Application
-
-Open your browser and visit:
-
-```
-http://localhost:3000
 ```
 
 ---
 
-## Project Structure
+## Requirements
 
-```
-MPPLtesting/
-│
-├── setup-server.sh
-├── package.json
-├── public/
-├── src/
-└── README.md
-```
+- macOS / Linux
+    
+- Node.js installed
+    
+- Internet connection (for dependency installation)
+    
 
 ---
 
 ## Troubleshooting
 
-### Permission Denied Error
+### Permission Denied
 
 ```bash
 chmod +x setup-server.sh
 ```
 
-### macOS Security Block
+### macOS Security Warning
 
 ```bash
 xattr -d com.apple.quarantine setup-server.sh
@@ -113,19 +106,8 @@ xattr -d com.apple.quarantine setup-server.sh
 
 ## License
 
-This project is licensed under the MIT License.
+MIT License
 
 ---
 
-## Support
-
-For issues, suggestions, or feature requests:
-
-- Open an issue on the GitHub repository
-    
-- Contact the development team
-    
-
----
-
-**Happy Talent Searching**
+**MAAVIS TALENT HUB — Simplifying Talent Connections**
