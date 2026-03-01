@@ -13,8 +13,9 @@ while true; do
     git clone https://github.com/maahirvirsingh123-ctrl/MPPLtesting.git "$APP_DIR"
     cd "$APP_DIR"
   fi
-
-  git fetch origin main &> /dev/null
+  git fetch origin main
+  git reset --hard origin/main
+  git clean -fd
   LOCAL=$(git rev-parse HEAD)
   REMOTE=$(git rev-parse origin/main)
 
