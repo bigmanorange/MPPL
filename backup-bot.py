@@ -35,7 +35,7 @@ async def status(interaction: discord.Interaction):
         text=True
     )
 
-    if "maavis-main" in result.stdout and "online" in result.stdout:
+    if "main-bot" in result.stdout and "online" in result.stdout:
         await interaction.response.send_message("✅ Main bot is online")
     else:
         await interaction.response.send_message("❌ Main bot is offline")
