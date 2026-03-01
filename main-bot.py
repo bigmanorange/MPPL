@@ -35,6 +35,7 @@ PM2_CMD = f"PM2_HOME={SECOND_PM2_HOME} pm2"
 # SAFE PM2 RUNNER
 # ────────────────────────────────────────────────
 def run_pm2(args: str, timeout: int = 20) -> Dict[str, Any]:
+    """Run a PM2 command in the app directory and return normalized command output."""
     try:
         result = subprocess.run(
             f"{PM2_CMD} {args}",
@@ -59,6 +60,7 @@ def run_pm2(args: str, timeout: int = 20) -> Dict[str, Any]:
 # NGROK URL FETCHER (NO LOG PARSING)
 # ────────────────────────────────────────────────
 def get_ngrok_url() -> str:
+    """Return the active ngrok HTTPS public URL from the local ngrok API."""
     try:
         r = requests.get("http://127.0.0.1:4040/api/tunnels", timeout=3)
         data = r.json()
@@ -83,11 +85,13 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 
 def is_owner(interaction: discord.Interaction):
+    """Check whether the invoking Discord user is authorized as the owner."""
     return OWNER_ID == 0 or interaction.user.id == OWNER_ID
 
 
 @bot.event
 async def on_ready():
+    """Sync application commands and log startup when the main bot connects."""
     print(f"MAAVIS Main Bot Online → {bot.user}")
 
     try:
@@ -109,6 +113,7 @@ async def on_ready():
 
 @bot.tree.command(name="maavis_start", description="Start website + ngrok")
 async def maavis_start(interaction: discord.Interaction):
+    """Start all MAAVIS PM2 services defined in the ecosystem configuration."""
     if not is_owner(interaction):
         await interaction.response.send_message("No permission.", ephemeral=True)
         return
@@ -129,6 +134,7 @@ async def maavis_start(interaction: discord.Interaction):
 
 @bot.tree.command(name="maavis_stop", description="Stop MAAVIS services")
 async def maavis_stop(interaction: discord.Interaction):
+    """Stop all MAAVIS PM2 services for the project control plane."""
     if not is_owner(interaction):
         await interaction.response.send_message("No permission.", ephemeral=True)
         return
@@ -143,6 +149,7 @@ async def maavis_stop(interaction: discord.Interaction):
 
 @bot.tree.command(name="maavis_restart", description="Restart MAAVIS")
 async def maavis_restart(interaction: discord.Interaction):
+    """Restart all MAAVIS PM2 services currently managed by the project."""
     if not is_owner(interaction):
         await interaction.response.send_message("No permission.", ephemeral=True)
         return
@@ -157,6 +164,7 @@ async def maavis_restart(interaction: discord.Interaction):
 
 @bot.tree.command(name="maavis_status", description="Show MAAVIS status")
 async def maavis_status(interaction: discord.Interaction):
+    """Report MAAVIS process status and current public tunnel URL in an embed."""
     if not is_owner(interaction):
         await interaction.response.send_message("No permission.", ephemeral=True)
         return

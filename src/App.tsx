@@ -682,7 +682,7 @@ export default function App() {
   }, [view, selectedTest]);
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] font-sans selection:bg-amber-100">
+    <div className="app-shell min-h-screen bg-[#F8FAFC] text-[#0F172A] font-sans selection:bg-amber-100">
       <AnimatePresence mode="wait">
         {view === 'login' && (
           <motion.div 
@@ -690,15 +690,15 @@ export default function App() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="flex items-center justify-center min-h-screen p-4 bg-[#0F172A]"
+            className="auth-screen flex items-center justify-center min-h-screen p-6"
           >
-            <div className="w-full max-w-md bg-white rounded-[32px] p-8 shadow-2xl border border-white/10">
+            <div className="auth-card w-full max-w-md rounded-[32px] p-8">
               <div className="flex flex-col items-center mb-8">
-                <div className="w-20 h-20 bg-[#0F172A] rounded-3xl flex items-center justify-center mb-4 shadow-lg">
+                <div className="w-20 h-20 bg-[#0F172A] rounded-3xl flex items-center justify-center mb-4 shadow-lg ring-8 ring-amber-100/70">
                   <span className="text-4xl font-serif font-black text-amber-500 italic">M</span>
                 </div>
-                <h1 className="text-3xl font-serif font-medium text-center text-[#0F172A]">Maavis Talent Hub</h1>
-                <p className="text-sm text-black/40 mt-2">Infrastructure & Projects Recruitment</p>
+                <h1 className="text-3xl font-serif font-semibold tracking-tight text-center text-[#0F172A]">Maavis Talent Hub</h1>
+                <p className="text-sm text-slate-500 mt-2 font-medium">Infrastructure & Projects Recruitment</p>
               </div>
 
               <form onSubmit={handleLogin} className="space-y-4">
@@ -756,13 +756,13 @@ export default function App() {
 
                 <button 
                   type="submit"
-                  className="w-full bg-[#0F172A] hover:bg-[#1E293B] text-white rounded-full py-4 font-medium transition-all flex items-center justify-center gap-2 group shadow-lg"
+                  className="w-full bg-[#0F172A] hover:bg-[#111827] text-white rounded-full py-4 font-semibold tracking-wide transition-all flex items-center justify-center gap-2 group shadow-lg"
                 >
                   Access Hub
                   <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform text-amber-500" />
                 </button>
 
-                <p className="text-center text-sm text-black/40 mt-4">
+                <p className="text-center text-sm text-slate-500 mt-4">
                   New candidate? <button type="button" onClick={() => setView('register')} className="text-amber-600 font-bold hover:underline">Register here</button>
                 </p>
               </form>
@@ -776,15 +776,15 @@ export default function App() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="flex items-center justify-center min-h-screen p-4 bg-[#0F172A]"
+            className="auth-screen flex items-center justify-center min-h-screen p-6"
           >
-            <div className="w-full max-w-md bg-white rounded-[32px] p-8 shadow-2xl border border-white/10">
+            <div className="auth-card w-full max-w-md rounded-[32px] p-8">
               <div className="flex flex-col items-center mb-8">
-                <div className="w-16 h-16 bg-[#0F172A] rounded-2xl flex items-center justify-center mb-4 shadow-lg">
+                <div className="w-16 h-16 bg-[#0F172A] rounded-2xl flex items-center justify-center mb-4 shadow-lg ring-8 ring-amber-100/70">
                   <span className="text-3xl font-serif font-black text-amber-500 italic">M</span>
                 </div>
-                <h1 className="text-2xl font-serif font-medium text-center text-[#0F172A]">Join Maavis Talent</h1>
-                <p className="text-xs text-black/40 mt-2">Create your candidate profile</p>
+                <h1 className="text-2xl font-serif font-semibold tracking-tight text-center text-[#0F172A]">Join Maavis Talent</h1>
+                <p className="text-xs text-slate-500 mt-2 font-medium">Create your candidate profile</p>
               </div>
 
               <form onSubmit={handleRegister} className="space-y-4">
@@ -845,7 +845,7 @@ export default function App() {
 
                 <button 
                   type="submit"
-                  className="w-full bg-[#0F172A] hover:bg-[#1E293B] text-white rounded-full py-4 font-medium transition-all shadow-lg"
+                  className="w-full bg-[#0F172A] hover:bg-[#111827] text-white rounded-full py-4 font-semibold tracking-wide transition-all shadow-lg"
                 >
                   Create Account
                 </button>
@@ -853,7 +853,7 @@ export default function App() {
                 <button 
                   type="button" 
                   onClick={() => setView('login')}
-                  className="w-full text-center text-sm text-black/40 hover:text-black transition-colors"
+                  className="w-full text-center text-sm text-slate-500 hover:text-slate-900 transition-colors font-medium"
                 >
                   Already have an account? Login
                 </button>
@@ -867,7 +867,7 @@ export default function App() {
             key="dashboard"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="max-w-6xl mx-auto py-12 px-4"
+            className="page-shell max-w-6xl mx-auto py-12 px-4"
           >
             <div className="flex justify-between items-center mb-12 bg-white p-6 rounded-[32px] shadow-sm border border-black/5">
               <div className="flex items-center gap-6">
@@ -995,7 +995,7 @@ export default function App() {
             key="admin"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="max-w-7xl mx-auto py-12 px-4"
+            className="page-shell max-w-7xl mx-auto py-12 px-4"
           >
             <div className="flex flex-col md:flex-row justify-between items-center mb-12 bg-[#0F172A] p-8 rounded-[40px] shadow-xl gap-6">
               <div className="flex items-center gap-6">
@@ -1970,7 +1970,7 @@ export default function App() {
             key="instructions"
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="flex items-center justify-center min-h-screen p-4"
+            className="page-shell flex items-center justify-center min-h-screen p-4"
           >
             <div className="w-full max-w-2xl bg-white rounded-[40px] p-10 shadow-2xl border border-black/5">
               <div className="flex items-center gap-4 mb-6">
@@ -2244,7 +2244,7 @@ export default function App() {
             key="result"
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="flex items-center justify-center min-h-screen p-4"
+            className="page-shell flex items-center justify-center min-h-screen p-4"
           >
             <div className="w-full max-w-md bg-white rounded-[40px] p-10 text-center shadow-2xl border border-black/5">
               <div className="w-24 h-24 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-8">
