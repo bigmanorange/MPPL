@@ -1,6 +1,5 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [react()],
@@ -8,16 +7,16 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
-    allowedHosts: [
-      "georgetta-renascent-doubly.ngrok-free.dev"
 
-    // THIS FIXES YOUR CONNECTION ERROR
+    // allow ngrok & tunnels
+    allowedHosts: "all",
+
     proxy: {
       "/api": {
         target: "http://localhost:3000",
         changeOrigin: true,
-        secure: false
-      }
-    }
-  }
+        secure: false,
+      },
+    },
+  },
 });
