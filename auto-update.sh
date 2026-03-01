@@ -3,7 +3,7 @@
 # ================= CONFIG =================
 REPO_DIR="/Users/macbookpro/server/app"
 BRANCH="main"
-PM2_PROCESS_NAME="website"
+PM2_PROCESS_NAME="all"
 SLEEP_TIME=60   # seconds between updates
 # =========================================
 
