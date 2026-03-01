@@ -326,55 +326,62 @@ async function startServer() {
   });
 
   // Assignment Routes
-  app.post("/api/assignments", async (req, res) => {
-    const { user_id, test_id, email } = req.body;
-    try {
-      if (email) {
-        // Assign by email
-        const user = db.prepare("SELECT id FROM users WHERE email = ?").get(email) as any;
-        if (user) {
-          db.prepare("INSERT OR IGNORE INTO assignments (user_id, test_id) VALUES (?, ?)").run(user.id, test_id);
-        } else {
-          db.prepare("INSERT INTO email_invites (email, test_id) VALUES (?, ?)").run(email, test_id);
-        }
+  /* ================= ADMIN INVITE ROUTE ================= */
 
-        const test = db.prepare("SELECT name FROM tests WHERE id = ?").get(test_id) as any;
-        const appUrl = (db.prepare("SELECT value FROM config WHERE key = 'app_url'").get() as any)?.value || `http://localhost:3000`;
-        
-        await sendEmail(email, "Assessment Assigned: " + test.name, `
-          <h1>Assessment Assigned</h1>
-          <p>You have been assigned the assessment: <strong>${test.name}</strong></p>
-          <p>Please log in or register at the link below to start:</p>
-          <a href="${appUrl}">Go to MAAVIS Talent Hub</a>
-        `);
-        
-        return res.json({ success: true, message: "Invite sent to " + email });
-      }
+app.post("/api/admin/invite", async (req, res) => {
+  try {
+    const { email, testId } = req.body;
 
-      db.prepare("INSERT OR IGNORE INTO assignments (user_id, test_id) VALUES (?, ?)").run(user_id, test_id);
-      res.json({ success: true });
-    } catch (err: any) {
-      res.status(500).json({ error: "Assignment failed: " + err.message });
+    if (!email || !testId) {
+      return res.status(400).json({ error: "Missing email or testId" });
     }
-  });
 
-  app.delete("/api/assignments/:user_id/:test_id", (req, res) => {
-    const { user_id, test_id } = req.params;
-    try {
-      db.prepare("DELETE FROM assignments WHERE user_id = ? AND test_id = ?").run(user_id, test_id);
-      res.json({ success: true });
-    } catch (err: any) {
-      res.status(500).json({ error: "Unassignment failed" });
+    const test = db.prepare(
+      "SELECT name FROM tests WHERE id = ?"
+    ).get(testId) as any;
+
+    if (!test) {
+      return res.status(404).json({ error: "Test not found" });
     }
-  });
 
-  app.get("/api/assignments/:user_id", (req, res) => {
-    const assignments = db.prepare(`
-      SELECT test_id FROM assignments WHERE user_id = ?
-    `).all(req.params.user_id);
-    res.json(assignments.map((a: any) => a.test_id));
-  });
+    // check if user already exists
+    const user = db.prepare(
+      "SELECT id FROM users WHERE email = ?"
+    ).get(email) as any;
 
+    if (user) {
+      db.prepare(
+        "INSERT OR IGNORE INTO assignments (user_id, test_id) VALUES (?, ?)"
+      ).run(user.id, testId);
+    } else {
+      db.prepare(
+        "INSERT INTO email_invites (email, test_id) VALUES (?, ?)"
+      ).run(email, testId);
+    }
+
+    const appUrl =
+      (db.prepare(
+        "SELECT value FROM config WHERE key = 'app_url'"
+      ).get() as any)?.value || "http://localhost:3000";
+
+    await sendEmail(
+      email,
+      `Assessment Invite: ${test.name}`,
+      `
+      <h2>MAAVIS Talent Hub</h2>
+      <p>You have been invited to complete:</p>
+      <b>${test.name}</b>
+      <br/><br/>
+      <a href="${appUrl}">Start Assessment</a>
+      `
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("INVITE ERROR:", err);
+    res.status(500).json({ error: "Invite failed" });
+  }
+});
   // Test Routes
   app.get("/api/tests", (req, res) => {
     const { user_id } = req.query;
