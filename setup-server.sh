@@ -13,6 +13,22 @@ echo ""
 
 PROJECT_DIR="$(pwd)"
 echo "Working directory: $PROJECT_DIR"
+# Add this near the top of setup-server.sh, after PROJECT_DIR="$(pwd)"
+
+# Create desired structure if not already present
+if [ ! -d "server/app" ]; then
+    echo "Creating nested structure: server/app/data"
+    mkdir -p server/app server/data
+fi
+
+# Move all project files into server/app (except setup script itself)
+shopt -s extglob dotglob nullglob
+mv !(setup-server.sh) server/app/ 2>/dev/null || true
+
+# Move into app folder for the rest of the script
+cd server/app
+PROJECT_DIR="$(pwd)"
+echo "Now working inside: $PROJECT_DIR"
 
 # ────────────────────────────────────────────────
 # 1. Detect OS & install missing system tools
