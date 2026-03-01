@@ -1,46 +1,52 @@
 #!/bin/bash
 
 # ================= CONFIG =================
+# Use environment variables, fallback to defaults
 REPO_DIR="${REPO_DIR:-$HOME/MPPLtesting/server/app}"
 BRANCH="${BRANCH:-main}"
 PM2_PROCESS_NAME="${PM2_PROCESS_NAME:-all}"
-SLEEP_TIME="${SLEEP_TIME:-60}"   # seconds between updates
-# =========================================
 
-while true; do
-    echo "🚀 Starting update at $(date)..."
+# Log file
+LOG_FILE="${LOG_FILE:-$HOME/.pm2-maavis/logs/auto-update.log}"
 
-    cd "$REPO_DIR" || {
-        echo "❌ Failed to enter repo directory"
-        sleep $SLEEP_TIME
-        continue
-    }
+# ================= START =================
+echo "[$(date)] 🚀 Starting auto-update check..." | tee -a "$LOG_FILE"
 
-    echo "📥 Fetching latest code..."
-    git fetch origin "$BRANCH"
+# Ensure repo directory exists
+if [ ! -d "$REPO_DIR" ]; then
+    echo "❌ Repo directory $REPO_DIR not found!" | tee -a "$LOG_FILE"
+    exit 1
+fi
 
-    echo "🔄 Resetting to origin/$BRANCH..."
-    git reset --hard "origin/$BRANCH"
+cd "$REPO_DIR" || exit 1
 
-    echo "🧹 Cleaning untracked files..."
-    git clean -fd
+# Fetch latest commits
+git fetch origin "$BRANCH"
 
-    # Install npm dependencies if package.json exists
-    if [ -f "package.json" ]; then
-        echo "📦 Installing npm dependencies..."
-        npm install
-    fi
+# Compare local HEAD with remote
+LOCAL=$(git rev-parse HEAD)
+REMOTE=$(git rev-parse origin/"$BRANCH")
 
-    # Install Python dependencies if requirements.txt exists
-    if [ -f "requirements.txt" ]; then
-        echo "🐍 Installing Python dependencies..."
-        pip install -r requirements.txt
-    fi
+if [ "$LOCAL" = "$REMOTE" ]; then
+    echo "✅ No updates found. Exiting." | tee -a "$LOG_FILE"
+    exit 0
+fi
 
-    echo "♻ Restarting website process..."
-    pm2 restart "$PM2_PROCESS_NAME"
+echo "🚨 Update found! Pulling latest code..." | tee -a "$LOG_FILE"
 
-    echo "✅ Update applied at $(date)"
-    echo "⏳ Sleeping for $SLEEP_TIME seconds..."
-    sleep $SLEEP_TIME
-done
+# Reset local repo to remote
+git reset --hard origin/"$BRANCH"
+git clean -fd
+
+# ================= DEPENDENCIES =================
+echo "📦 Installing npm dependencies..." | tee -a "$LOG_FILE"
+npm install 2>&1 | tee -a "$LOG_FILE"
+
+echo "🐍 Installing Python dependencies..." | tee -a "$LOG_FILE"
+pip install -r requirements.txt 2>&1 | tee -a "$LOG_FILE"
+
+# ================= RESTART PROCESSES =================
+echo "♻ Restarting PM2 processes: $PM2_PROCESS_NAME" | tee -a "$LOG_FILE"
+pm2 restart "$PM2_PROCESS_NAME" --update-env
+
+echo "✅ Auto-update completed at $(date)" | tee -a "$LOG_FILE"
