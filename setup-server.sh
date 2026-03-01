@@ -116,10 +116,10 @@ prompt_and_set "BACKUP_TOKEN"       "BACKUP_TOKEN (optional)"
 # ✅ NEW ENV FOR NGROK
 prompt_and_set "NGROK_AUTHTOKEN" "NGROK_AUTHTOKEN (from dashboard.ngrok.com)"
 prompt_and_set "NGROK_PORT"      "NGROK_PORT (default 3000)"
-prompt_and_set "SMTP_HOST"
-prompt_and_set "SMTP_PORT"
-prompt_and_set "SMTP_USER"
-prompt_and_set "SMTP_PASS"
+prompt_and_set "SMTP_HOST"       "SMTP HOST"
+prompt_and_set "SMTP_PORT"       "SMTP PORT"
+prompt_and_set "SMTP_USER"       "SMTP_USER"
+prompt_and_set "SMTP_PASS"       "SMTP_PASS"
 
 # Configure ngrok auth automatically
 if grep -q NGROK_AUTHTOKEN .env; then
