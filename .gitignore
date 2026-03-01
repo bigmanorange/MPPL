@@ -1,8 +1,18 @@
-# Secrets & generated files
+# Secrets & generated
 .env
-ecosystem-maavis.config.js
+ecosystem-maavis.config.*
 cloudflared.log
-data/
+
+# Python
 venv-discord-bot/
+__pycache__/
+*.pyc
+
+# Node
 node_modules/
 dist/
+
+# Data / logs
+data/
+*.db
+*.log
