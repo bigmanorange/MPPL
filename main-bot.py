@@ -1,5 +1,5 @@
-# main-bot.py - Main Discord bot for MAAVIS TALENT HUB
-# Controls the website/tunnel/updater via separate PM2 instance (NGROK VERSION)
+# main-bot.py
+# MAAVIS TALENT HUB - Main Control Bot (NGROK VERSION)
 
 import os
 import asyncio
@@ -9,52 +9,39 @@ from pathlib import Path
 from typing import Dict, Any
 
 import discord
-from discord import app_commands
 from discord.ext import commands
+from discord import app_commands
 from dotenv import load_dotenv
-
 import requests
 
 load_dotenv()
 
 # ────────────────────────────────────────────────
-# Config
+# CONFIG
 # ────────────────────────────────────────────────
-TOKEN = os.getenv("DISCORD_TOKEN_MAIN") or os.getenv("TOKEN")
+TOKEN = os.getenv("DISCORD_TOKEN_MAIN")
 GUILD_ID = int(os.getenv("DISCORD_GUILD_ID", "0"))
 OWNER_ID = int(os.getenv("DISCORD_OWNER_ID", "0"))
 
-# Paths
-PROJECT_DIR = Path(__file__).resolve().parents[2]
+# Project paths (SAFE — no cwd crashes)
+APP_DIR = Path(__file__).resolve().parent
+ECOSYSTEM_FILE = APP_DIR / "ecosystem-maavis.config.cjs"
+AUTO_UPDATE_SCRIPT = APP_DIR / "auto-update.sh"
+
 SECOND_PM2_HOME = Path.home() / ".pm2-maavis"
-PM2_SECOND_CMD = f"PM2_HOME={SECOND_PM2_HOME} pm2"
-
-ECOSYSTEM_FILE = Path(
-    os.getenv(
-        "ECOSYSTEM_FILE",
-        PROJECT_DIR / "server/app/ecosystem-maavis.config.cjs",
-    )
-)
-
-AUTO_UPDATE_SCRIPT = Path(
-    os.getenv(
-        "AUTO_UPDATE_SCRIPT",
-        PROJECT_DIR / "server/app/auto-update.sh",
-    )
-)
-
-os.chdir(PROJECT_DIR)
+PM2_CMD = f"PM2_HOME={SECOND_PM2_HOME} pm2"
 
 # ────────────────────────────────────────────────
-# Helper: Run PM2 on second instance
+# SAFE PM2 RUNNER
 # ────────────────────────────────────────────────
-def run_second_pm2(args: str, timeout: int = 20) -> Dict[str, Any]:
+def run_pm2(args: str, timeout: int = 20) -> Dict[str, Any]:
     try:
         result = subprocess.run(
-            f"{PM2_SECOND_CMD} {args}",
+            f"{PM2_CMD} {args}",
             shell=True,
             capture_output=True,
             text=True,
+            cwd=str(APP_DIR),   # ⭐ fixes cwd ENOENT forever
             timeout=timeout,
         )
 
@@ -64,15 +51,12 @@ def run_second_pm2(args: str, timeout: int = 20) -> Dict[str, Any]:
             "stderr": result.stderr.strip(),
         }
 
-    except subprocess.TimeoutExpired:
-        return {"success": False, "stdout": "", "stderr": "Timeout"}
-
     except Exception as e:
         return {"success": False, "stdout": "", "stderr": str(e)}
 
 
 # ────────────────────────────────────────────────
-# NGROK tunnel detection (NEW)
+# NGROK URL FETCHER (NO LOG PARSING)
 # ────────────────────────────────────────────────
 def get_ngrok_url() -> str:
     try:
@@ -90,49 +74,98 @@ def get_ngrok_url() -> str:
 
 
 # ────────────────────────────────────────────────
-# Bot setup
+# DISCORD BOT SETUP
 # ────────────────────────────────────────────────
 intents = discord.Intents.default()
 intents.message_content = True
+
 bot = commands.Bot(command_prefix="!", intents=intents)
+
+
+def is_owner(interaction: discord.Interaction):
+    return OWNER_ID == 0 or interaction.user.id == OWNER_ID
 
 
 @bot.event
 async def on_ready():
-    print(f"Main bot online: {bot.user} (ID: {bot.user.id})")
+    print(f"MAAVIS Main Bot Online → {bot.user}")
 
     try:
         if GUILD_ID:
             guild = discord.Object(id=GUILD_ID)
             bot.tree.copy_global_to(guild=guild)
             await bot.tree.sync(guild=guild)
-            print(f"Commands synced to guild {GUILD_ID}")
         else:
             await bot.tree.sync()
-            print("Global sync (may take ~1h)")
+
+        print("Commands synced.")
     except Exception as e:
-        print(f"Sync error: {e}")
-
-
-def is_owner(interaction: discord.Interaction) -> bool:
-    return OWNER_ID == 0 or interaction.user.id == OWNER_ID
+        print("Sync error:", e)
 
 
 # ────────────────────────────────────────────────
-# STATUS
+# COMMANDS
 # ────────────────────────────────────────────────
-@bot.tree.command(name="maavis_status", description="Status of website, tunnel & updater")
-async def maavis_status(interaction: discord.Interaction):
 
+@bot.tree.command(name="maavis_start", description="Start website + ngrok")
+async def maavis_start(interaction: discord.Interaction):
     if not is_owner(interaction):
         await interaction.response.send_message("No permission.", ephemeral=True)
         return
 
     await interaction.response.defer()
 
-    res = run_second_pm2("jlist")
+    if not ECOSYSTEM_FILE.exists():
+        await interaction.followup.send("❌ ecosystem file missing.")
+        return
 
-    if not res["success"]:
+    res = run_pm2(f"start {ECOSYSTEM_FILE}")
+
+    if res["success"]:
+        await interaction.followup.send("✅ MAAVIS started.")
+    else:
+        await interaction.followup.send(f"❌ {res['stderr']}")
+
+
+@bot.tree.command(name="maavis_stop", description="Stop MAAVIS services")
+async def maavis_stop(interaction: discord.Interaction):
+    if not is_owner(interaction):
+        await interaction.response.send_message("No permission.", ephemeral=True)
+        return
+
+    await interaction.response.defer()
+
+    res = run_pm2("delete all")
+
+    msg = "🛑 Stopped." if res["success"] else f"❌ {res['stderr']}"
+    await interaction.followup.send(msg)
+
+
+@bot.tree.command(name="maavis_restart", description="Restart MAAVIS")
+async def maavis_restart(interaction: discord.Interaction):
+    if not is_owner(interaction):
+        await interaction.response.send_message("No permission.", ephemeral=True)
+        return
+
+    await interaction.response.defer()
+
+    res = run_pm2("restart all")
+
+    msg = "🔄 Restarted." if res["success"] else f"❌ {res['stderr']}"
+    await interaction.followup.send(msg)
+
+
+@bot.tree.command(name="maavis_status", description="Show MAAVIS status")
+async def maavis_status(interaction: discord.Interaction):
+    if not is_owner(interaction):
+        await interaction.response.send_message("No permission.", ephemeral=True)
+        return
+
+    await interaction.response.defer()
+
+    res = run_pm2("jlist")
+
+    if not res["success"] or not res["stdout"]:
         await interaction.followup.send("❌ Maavis PM2 not running.")
         return
 
@@ -140,109 +173,39 @@ async def maavis_status(interaction: discord.Interaction):
         processes = json.loads(res["stdout"])
 
         embed = discord.Embed(
-            title="Maavis Status",
+            title="MAAVIS Status",
             color=discord.Color.blue()
         )
 
         for proc in processes:
-            status = proc.get("pm2_env", {}).get("status", "unknown")
-            restarts = proc.get("pm2_env", {}).get("restart_time", 0)
+            status = proc["pm2_env"]["status"]
+            restarts = proc["pm2_env"]["restart_time"]
 
-            emoji = (
-                "🟢" if status == "online"
-                else "🟡" if status in ["stopped", "stopping"]
-                else "🔴"
-            )
+            emoji = "🟢" if status == "online" else "🔴"
 
             embed.add_field(
                 name=f"{emoji} {proc['name']}",
-                value=f"**{status.capitalize()}** • Restarts: {restarts}",
+                value=f"{status.capitalize()} • Restarts: {restarts}",
                 inline=False,
             )
 
-        # NGROK URL
-        url = get_ngrok_url()
-        embed.add_field(name="🌐 Public URL", value=url, inline=False)
-
-        embed.set_footer(text="Main bot PM2 unaffected.")
+        embed.add_field(
+            name="Public URL",
+            value=get_ngrok_url(),
+            inline=False,
+        )
 
         await interaction.followup.send(embed=embed)
 
     except Exception as e:
-        await interaction.followup.send(
-            f"Error:\n```{str(e)}\n{res['stdout'][:800]}```"
-        )
+        await interaction.followup.send(f"Parse error:\n```{e}```")
 
 
 # ────────────────────────────────────────────────
-# START
-# ────────────────────────────────────────────────
-@bot.tree.command(name="maavis_start", description="Start Maavis processes")
-async def maavis_start(interaction: discord.Interaction):
-
-    if not is_owner(interaction):
-        await interaction.response.send_message("No permission.", ephemeral=True)
-        return
-
-    await interaction.response.defer()
-
-    if not AUTO_UPDATE_SCRIPT.exists():
-        await interaction.followup.send(
-            f"❌ Auto-update script not found:\n{AUTO_UPDATE_SCRIPT}"
-        )
-        return
-
-    res = run_second_pm2(f"start {ECOSYSTEM_FILE}")
-
-    msg = "✅ Started" if res["success"] else f"❌ {res['stderr'] or 'Error'}"
-    await interaction.followup.send(msg)
-
-
-# ────────────────────────────────────────────────
-# STOP
-# ────────────────────────────────────────────────
-@bot.tree.command(name="maavis_stop", description="Stop Maavis processes")
-async def maavis_stop(interaction: discord.Interaction):
-
-    if not is_owner(interaction):
-        await interaction.response.send_message("No permission.", ephemeral=True)
-        return
-
-    await interaction.response.defer()
-
-    res = run_second_pm2(
-        "stop maavis-website maavis-tunnel maavis-updater"
-    )
-
-    msg = "🛑 Stopped" if res["success"] else f"❌ {res['stderr'] or 'Error'}"
-    await interaction.followup.send(msg)
-
-
-# ────────────────────────────────────────────────
-# RESTART
-# ────────────────────────────────────────────────
-@bot.tree.command(name="maavis_restart", description="Restart Maavis processes")
-async def maavis_restart(interaction: discord.Interaction):
-
-    if not is_owner(interaction):
-        await interaction.response.send_message("No permission.", ephemeral=True)
-        return
-
-    await interaction.response.defer()
-
-    res = run_second_pm2(
-        "restart maavis-website maavis-tunnel maavis-updater"
-    )
-
-    msg = "🔄 Restarted" if res["success"] else f"❌ {res['stderr'] or 'Error'}"
-    await interaction.followup.send(msg)
-
-
-# ────────────────────────────────────────────────
-# Main
+# RUN
 # ────────────────────────────────────────────────
 if __name__ == "__main__":
     if not TOKEN:
-        print("ERROR: No TOKEN in .env")
+        print("ERROR: DISCORD_TOKEN_MAIN missing")
     else:
         bot.run(TOKEN)
