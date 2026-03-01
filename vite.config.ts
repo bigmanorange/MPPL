@@ -9,7 +9,7 @@ export default defineConfig({
     port: 5173,
 
     // allow ngrok & tunnels
-    allowedHosts: "georgetta-renascent-doubly.ngrok-free.dev",
+    allowedHosts: ["georgetta-renascent-doubly.ngrok-free.dev"],
 
     proxy: {
       "/api": {
