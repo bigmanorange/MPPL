@@ -1,114 +1,200 @@
-#!/bin/zsh
+#!/usr/bin/env bash
+# setup-server.sh
+# Portable one-command setup for MAAVIS TALENT HUB
+# Run from inside the project directory (where package.json, main-bot.py, etc. live)
+# Features: interactive secrets prompt, two separate PM2 instances, no hard-coded paths
 
-# ================================================
-# MAAVIS TALENT HUB - Smart Setup v2.3
-# Ready for direct GitHub upload
-# Last updated: Feb 28 2026
-# ================================================
+set -e
 
-echo "🚀 Starting MAAVIS TALENT HUB Smart Setup v2.3..."
+echo "========================================"
+echo "MAAVIS TALENT HUB - Setup & Deployment"
+echo "========================================"
+echo ""
 
-# 1. Homebrew
-if ! command -v brew &> /dev/null; then
-    echo "Installing Homebrew..."
-    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+PROJECT_DIR="$(pwd)"
+echo "Working directory: $PROJECT_DIR"
+
+# ────────────────────────────────────────────────
+# 1. Detect OS & install missing system tools
+# ────────────────────────────────────────────────
+
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    PKG_MGR="brew"
+    INSTALL_CMD="brew install"
 else
-    echo "✅ Homebrew already installed"
+    PKG_MGR="apt"
+    INSTALL_CMD="sudo apt update && sudo apt install -y"
 fi
 
-# 2. System dependencies
-echo "Installing/updating Node, Git, Cloudflared..."
-brew install node git cloudflared
+command -v node >/dev/null 2>&1 || {
+    echo "Node.js not found → installing..."
+    if [ "$PKG_MGR" = "brew" ]; then
+        $INSTALL_CMD node
+    else
+        $INSTALL_CMD nodejs npm
+    fi
+}
 
-# 3. Global tools
-echo "Installing PM2 & TSX globally..."
-npm install -g pm2 tsx
+command -v pm2 >/dev/null 2>&1 || {
+    echo "PM2 not found → installing globally..."
+    sudo npm install -g pm2
+}
 
-# 4. Create folders
-echo "Creating data folder..."
-mkdir -p ~/server/data
+command -v cloudflared >/dev/null 2>&1 || {
+    echo "cloudflared not found → installing..."
+    if [ "$PKG_MGR" = "brew" ]; then
+        $INSTALL_CMD cloudflared
+    else
+        $INSTALL_CMD cloudflared || {
+            echo "cloudflared install failed. Install manually:"
+            echo "https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/install-and-setup/tunnel-guide/local/"
+            exit 1
+        }
+    fi
+}
 
-# 5. Clone or update repository
-cd ~/server
-if [ -d "app" ]; then
-    echo "✅ Updating existing app from GitHub..."
-    cd app && git pull origin main
-else
-    echo "Cloning fresh repository..."
-    git clone https://github.com/maahirvirsingh123-ctrl/MPPLtesting.git app
-    cd app
-fi
+# ────────────────────────────────────────────────
+# 2. Install Node dependencies
+# ────────────────────────────────────────────────
 
-# 6. Fix duplicate Vite issue (prevents true.js crash)
-echo "Fixing Vite duplicate in package.json..."
-sed -i '' '/"vite": "^6.2.0",/d' package.json
-
-# 7. Install dependencies
-echo "Installing project dependencies..."
+echo "Installing npm dependencies..."
 npm install
 
-# 8. .env setup (interactive + safe)
-echo "=== Setting up .env file ==="
-if [ ! -f ".env" ]; then
-    cp .env.example .env
-    echo "✅ Created .env from template"
-fi
+# ────────────────────────────────────────────────
+# 3. Python virtual environment for Discord bots
+# ────────────────────────────────────────────────
 
-echo "Please enter your details (press Enter to skip/keep existing):"
-echo -n "Gmail address (SMTP_USER): "
-read smtp_user
-echo -n "Gmail App Password (SMTP_PASS): "
-read -s smtp_pass
+echo "Setting up Python virtual environment..."
+python3 -m venv venv-discord-bot 2>/dev/null || python -m venv venv-discord-bot || {
+    echo "Python venv creation failed. Make sure python3 is installed."
+    exit 1
+}
+
+source venv-discord-bot/bin/activate
+pip install --upgrade pip
+if [ -f "requirements.txt" ]; then
+    pip install -r requirements.txt
+else
+    echo "No requirements.txt found → installing basic deps"
+    pip install discord.py python-dotenv
+fi
+deactivate
+
+# ────────────────────────────────────────────────
+# 4. Interactive secrets configuration (.env)
+# ────────────────────────────────────────────────
+
 echo ""
-echo -n "Gemini API Key (optional, leave blank if not using AI): "
-read gemini_key
+echo "=== Configure secrets (required for bots) ==="
+echo "Press Enter to keep existing / skip value"
+
+if [ -f ".env" ]; then
+    source .env
+    echo "(Existing .env found — you can keep current values)"
+else
+    touch .env
+fi
+
+prompt_and_set() {
+    local var="$1"
+    local msg="$2"
+    local current="${!var:-empty}"
+
+    read -p "$msg [current: $current]: " input
+    if [ -n "$input" ]; then
+        sed -i.bak "/^$var=/d" .env 2>/dev/null || true
+        echo "$var=$input" >> .env
+        rm -f .env.bak
+        export "$var=$input"
+    fi
+}
+
+prompt_and_set "DISCORD_TOKEN_MAIN"    "DISCORD_TOKEN_MAIN (main bot token)"
+prompt_and_set "DISCORD_GUILD_ID"      "DISCORD_GUILD_ID (your server ID)"
+prompt_and_set "DISCORD_OWNER_ID"      "DISCORD_OWNER_ID (your Discord user ID)"
+prompt_and_set "BACKUP_TOKEN"          "BACKUP_TOKEN (backup bot — optional)"
+prompt_and_set "SMTP_HOST"             "SMTP_HOST (e.g. smtp.gmail.com)"
+prompt_and_set "SMTP_PORT"             "SMTP_PORT (e.g. 587)"
+prompt_and_set "SMTP_USER"             "SMTP_USER (your email)"
+prompt_and_set "SMTP_PASS"             "SMTP_PASS (app password)"
+
 echo ""
+echo ".env updated!"
 
-# Safe .env updates
-if [ -n "$smtp_user" ]; then
-    if grep -q "^SMTP_USER=" .env; then
-        sed -i '' "s|^SMTP_USER=.*|SMTP_USER=$smtp_user|" .env
-    else
-        echo "SMTP_USER=$smtp_user" >> .env
-    fi
-fi
+# ────────────────────────────────────────────────
+# 5. Generate ecosystem-maavis.config.js (second PM2)
+# ────────────────────────────────────────────────
 
-if [ -n "$smtp_pass" ]; then
-    if grep -q "^SMTP_PASS=" .env; then
-        sed -i '' "s|^SMTP_PASS=.*|SMTP_PASS=$smtp_pass|" .env
-    else
-        echo "SMTP_PASS=$smtp_pass" >> .env
-    fi
-fi
+echo "Generating ecosystem-maavis.config.js (dynamic paths)..."
+cat > ecosystem-maavis.config.js << 'EOL'
+module.exports = {
+  apps: [
+    {
+      name: 'maavis-website',
+      script: 'npm',
+      args: 'run dev',  // ← change to 'run build && node dist/server.js' for production
+      cwd: process.cwd(),
+      env: { NODE_ENV: 'development', PORT: 3000 },
+      autorestart: true,
+      watch: false,
+      max_restarts: 10,
+      restart_delay: 4000
+    },
+    {
+      name: 'maavis-cf-tunnel',
+      script: 'cloudflared',
+      args: 'tunnel --url http://localhost:3000',
+      cwd: process.cwd(),
+      autorestart: true,
+      watch: false,
+      max_restarts: 10,
+      restart_delay: 1000
+    },
+    {
+      name: 'maavis-updater',
+      script: './auto-update.sh',
+      interpreter: '/bin/bash',
+      cwd: process.cwd(),
+      autorestart: true,
+      watch: false,
+      max_restarts: 5,
+      restart_delay: 60000
+    }
+  ]
+};
+EOL
 
-if [ -n "$gemini_key" ]; then
-    if grep -q "^GEMINI_API_KEY=" .env; then
-        sed -i '' "s|^GEMINI_API_KEY=.*|GEMINI_API_KEY=$gemini_key|" .env
-    else
-        echo "GEMINI_API_KEY=$gemini_key" >> .env
-    fi
-fi
+# Make helper scripts executable
+chmod +x auto-update.sh send-tunnel-url.sh 2>/dev/null || true
 
-echo "✅ .env configured successfully!"
+# ────────────────────────────────────────────────
+# 6. Start Discord bots in default PM2
+# ────────────────────────────────────────────────
 
-# 9. Start services (exactly the working commands)
-echo "Starting services..."
-pm2 stop maavis-hub maavis-updater cf-tunnel 2>/dev/null || true
+echo "Starting Discord bots in default PM2..."
+pm2 delete main-bot 2>/dev/null || true
+pm2 delete backup-bot 2>/dev/null || true
 
-DATA_DIR=~/server/data pm2 start server.ts --name "maavis-hub" --interpreter tsx --cwd ~/server/app
-
-pm2 start "cloudflared tunnel --url http://localhost:3000" --name "cf-tunnel"
-
-chmod +x auto-update.sh
-pm2 start ./auto-update.sh --name "maavis-updater" --cwd ~/server/app --interpreter zsh
+pm2 start venv-discord-bot/bin/python --name main-bot -- main-bot.py
+pm2 start venv-discord-bot/bin/python --name backup-bot -- backup-bot.py
 
 pm2 save
-pm2 list
 
 echo ""
-echo "🎉 SETUP COMPLETE!"
-echo "✅ App is now running at: http://localhost:3000"
-echo "✅ Public URL (Cloudflare tunnel): pm2 logs cf-tunnel"
+echo "========================================"
+echo "Setup finished!"
+echo "========================================"
 echo ""
-echo "Next time just run: cd ~/server/app && ./setup-server.sh"
-echo "Or push any changes to GitHub — auto-updater will keep everything in sync."
+echo "What to do next:"
+echo "  1. Use Discord command:   /maavis_start    → starts website + tunnel + updater"
+echo "  2. Check everything:      /maavis_status   → shows status + tunnel URL"
+echo "  3. View bot logs:         pm2 logs main-bot"
+echo "  4. View website logs:     pm2-maavis logs maavis-cf-tunnel"
+echo ""
+echo "Useful alias (add to ~/.zshrc or ~/.bashrc):"
+echo "  alias pm2-maavis='PM2_HOME=~/.pm2-maavis pm2'"
+echo ""
+echo "To re-run setup or re-configure secrets:"
+echo "  ./setup-server.sh"
+echo ""
+echo "Enjoy MAAVIS TALENT HUB!"
