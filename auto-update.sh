@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # ================= CONFIG =================
-REPO_DIR="/Users/macbookpro/server/app"
-BRANCH="main"
-PM2_PROCESS_NAME="all"
-SLEEP_TIME=60   # seconds between updates
+REPO_DIR="${REPO_DIR:-$HOME/MPPLtesting/server/app}"
+BRANCH="${BRANCH:-main}"
+PM2_PROCESS_NAME="${PM2_PROCESS_NAME:-all}"
+SLEEP_TIME="${SLEEP_TIME:-60}"   # seconds between updates
 # =========================================
 
 while true; do
