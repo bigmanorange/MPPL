@@ -1,7 +1,4 @@
-# main-bot.py
-# Main Discord bot for MAAVIS TALENT HUB
-# Controls the website/tunnel/updater via separate PM2 instance
-
+# main-bot.py - Main Discord bot for MAAVIS TALENT HUB
 import os
 import asyncio
 import subprocess
@@ -18,27 +15,37 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ────────────────────────────────────────────────
-# Config
+# Config from .env
 # ────────────────────────────────────────────────
 TOKEN = os.getenv("DISCORD_TOKEN_MAIN") or os.getenv("TOKEN")
 GUILD_ID = int(os.getenv("DISCORD_GUILD_ID", "0"))
 OWNER_ID = int(os.getenv("DISCORD_OWNER_ID", "0"))
 
-SECOND_PM2_HOME = str(Path.home() / ".pm2-maavis")
+# PM2 second instance
+SECOND_PM2_HOME = os.getenv("SECOND_PM2_HOME", str(Path.home() / ".pm2-maavis"))
 PM2_SECOND_CMD = f'PM2_HOME={SECOND_PM2_HOME} pm2'
 
-# Dynamic project directory (works in flat or server/app structure)
-PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # go up one level from server/app
-ECOSYSTEM_FILE = "ecosystem-maavis.config.cjs"  # must be .cjs for CommonJS
+# Project paths (env override optional)
+REPO_ROOT = os.getenv("PROJECT_DIR", Path(__file__).resolve().parents[2])  # two levels up
+ECOSYSTEM_FILE = os.getenv(
+    "ECOSYSTEM_FILE",
+    Path(REPO_ROOT) / "server" / "app" / "ecosystem-maavis.config.cjs"
+)
+AUTO_UPDATE_SCRIPT = os.getenv(
+    "AUTO_UPDATE_SCRIPT",
+    Path(REPO_ROOT) / "server" / "app" / "auto-update.sh"
+)
+
+# Ensure we are in the project root
+os.chdir(REPO_ROOT)
 
 # ────────────────────────────────────────────────
-# Helper: Run PM2 command on second instance with correct cwd
+# Helper: Run PM2 on second instance
 # ────────────────────────────────────────────────
 def run_second_pm2(args: str, timeout: int = 20) -> Dict[str, Any]:
     try:
-        # Ensure we run from the project dir where ecosystem file is
         result = subprocess.run(
-            f"cd {PROJECT_DIR} && {PM2_SECOND_CMD} {args}",
+            f"{PM2_SECOND_CMD} {args}",
             shell=True,
             capture_output=True,
             text=True,
@@ -50,27 +57,24 @@ def run_second_pm2(args: str, timeout: int = 20) -> Dict[str, Any]:
             "stderr": result.stderr.strip(),
         }
     except subprocess.TimeoutExpired:
-        return {"success": False, "stdout": "", "stderr": "Command timed out"}
+        return {"success": False, "stdout": "", "stderr": "Timeout"}
     except Exception as e:
         err = str(e).lower()
         if "conn" in err or "refused" in err or "not running" in err:
-            print("[MaavisControl] Second PM2 daemon not running - attempting lazy start...")
+            print("[Maavis] Second PM2 not running - lazy starting...")
             start_res = run_second_pm2(f"start {ECOSYSTEM_FILE}")
             if start_res["success"]:
                 asyncio.sleep(2)
                 return run_second_pm2(args)
         return {"success": False, "stdout": "", "stderr": str(e)}
 
-# ────────────────────────────────────────────────
-# Extract Cloudflare tunnel URL from logs
-# ────────────────────────────────────────────────
 def get_cf_tunnel_url() -> str:
     res = run_second_pm2("logs maavis-cf-tunnel --lines 80 --nostream")
     if not res["success"]:
-        return "Tunnel not running or logs unavailable"
+        return "Tunnel not running"
 
     match = re.search(r"https://[a-z0-9-]+\.trycloudflare\.com", res["stdout"])
-    return match.group(0) if match else "No tunnel URL found in logs"
+    return match.group(0) if match else "No tunnel URL in logs"
 
 # ────────────────────────────────────────────────
 # Bot setup
@@ -93,12 +97,11 @@ async def on_ready():
             print(f"Commands synced to guild {GUILD_ID}")
         else:
             await bot.tree.sync()
-            print("Global sync done (may take up to 1h)")
+            print("Global sync (may take 1h)")
     except Exception as e:
         print(f"Sync error: {e}")
 
 
-# Owner check
 def is_owner(interaction: discord.Interaction) -> bool:
     if OWNER_ID == 0:
         return True
@@ -106,9 +109,9 @@ def is_owner(interaction: discord.Interaction) -> bool:
 
 
 # ────────────────────────────────────────────────
-# Maavis control commands (second PM2 only)
+# Maavis commands
 # ────────────────────────────────────────────────
-@bot.tree.command(name="maavis_status", description="Status of Maavis website, tunnel & updater")
+@bot.tree.command(name="maavis_status", description="Status of website, tunnel & updater")
 async def maavis_status(interaction: discord.Interaction):
     if not is_owner(interaction):
         await interaction.response.send_message("No permission.", ephemeral=True)
@@ -118,7 +121,7 @@ async def maavis_status(interaction: discord.Interaction):
 
     res = run_second_pm2("jlist")
     if not res["success"]:
-        await interaction.followup.send("❌ Maavis second PM2 not running.")
+        await interaction.followup.send("❌ Maavis PM2 not running.")
         return
 
     try:
@@ -136,27 +139,31 @@ async def maavis_status(interaction: discord.Interaction):
             )
 
         url = get_cf_tunnel_url()
-        embed.add_field(name="🌐 Cloudflare Quick Tunnel", value=url, inline=False)
-        embed.set_footer(text="Main bots PM2 is not affected.")
+        embed.add_field(name="🌐 Cloudflare Tunnel", value=url, inline=False)
+        embed.set_footer(text="Main bot PM2 unaffected.")
 
         await interaction.followup.send(embed=embed)
     except Exception as e:
-        await interaction.followup.send(f"Error parsing status: {str(e)}\nRaw:\n```{res['stdout'][:1000]}```")
+        await interaction.followup.send(f"Error: {str(e)}\nRaw:\n```{res['stdout'][:1000]}```")
 
 
-@bot.tree.command(name="maavis_start", description="Start Maavis website + tunnel + updater")
+@bot.tree.command(name="maavis_start", description="Start Maavis processes")
 async def maavis_start(interaction: discord.Interaction):
     if not is_owner(interaction):
         await interaction.response.send_message("No permission.", ephemeral=True)
         return
 
     await interaction.response.defer()
+    if not AUTO_UPDATE_SCRIPT.exists():
+        await interaction.followup.send(f"❌ Auto-update script not found: {AUTO_UPDATE_SCRIPT}")
+        return
+
     res = run_second_pm2(f"start {ECOSYSTEM_FILE}")
-    msg = "✅ Started (or already running)" if res["success"] else f"❌ {res['stderr'] or 'Error'}"
+    msg = "✅ Started" if res["success"] else f"❌ {res['stderr'] or 'Error'}"
     await interaction.followup.send(msg)
 
 
-@bot.tree.command(name="maavis_stop", description="Stop Maavis website + tunnel + updater")
+@bot.tree.command(name="maavis_stop", description="Stop Maavis processes")
 async def maavis_stop(interaction: discord.Interaction):
     if not is_owner(interaction):
         await interaction.response.send_message("No permission.", ephemeral=True)
@@ -168,7 +175,7 @@ async def maavis_stop(interaction: discord.Interaction):
     await interaction.followup.send(msg)
 
 
-@bot.tree.command(name="maavis_restart", description="Restart Maavis website + tunnel + updater")
+@bot.tree.command(name="maavis_restart", description="Restart Maavis processes")
 async def maavis_restart(interaction: discord.Interaction):
     if not is_owner(interaction):
         await interaction.response.send_message("No permission.", ephemeral=True)
@@ -180,13 +187,8 @@ async def maavis_restart(interaction: discord.Interaction):
     await interaction.followup.send(msg)
 
 
-# ────────────────────────────────────────────────
-# Add your other commands here if any
-# ────────────────────────────────────────────────
-
-
 if __name__ == "__main__":
     if not TOKEN:
-        print("ERROR: No DISCORD_TOKEN_MAIN or TOKEN in .env")
+        print("ERROR: No TOKEN in .env")
     else:
         bot.run(TOKEN)
