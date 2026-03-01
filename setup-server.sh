@@ -182,7 +182,7 @@ module.exports = {
       name: 'maavis-updater',
       script: './auto-update.sh',
       interpreter: '/bin/bash',
-      cwd: process.cwd(),
+      cwd: __dirname,
       autorestart: true,
       watch: false
     }
