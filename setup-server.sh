@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # setup-server.sh
 # Portable one-command setup for MAAVIS TALENT HUB
-# Run from inside the project directory (where package.json, main-bot.py, etc. live)
 # Features: interactive secrets prompt, two separate PM2 instances, no hard-coded paths
 
 set -e
@@ -12,28 +11,48 @@ echo "========================================"
 echo ""
 
 PROJECT_DIR="$(pwd)"
-echo "Working directory: $PROJECT_DIR"
-# Add this near the top of setup-server.sh, after PROJECT_DIR="$(pwd)"
+echo "Initial working directory: $PROJECT_DIR"
 
-# Create desired structure if not already present
+# ────────────────────────────────────────────────
+# 0. Create folder structure
+# ────────────────────────────────────────────────
 if [ ! -d "server/app" ]; then
-    echo "Creating nested structure: server/app/data"
+    echo "Creating nested structure: server/app and server/data"
     mkdir -p server/app server/data
 fi
 
-# Move all project files into server/app (except setup script itself)
+# Move all project files (except setup script) into server/app
 shopt -s extglob dotglob nullglob
 mv !(setup-server.sh) server/app/ 2>/dev/null || true
 
-# Move into app folder for the rest of the script
+# Ensure auto-update.sh exists
+if [ ! -f "server/app/auto-update.sh" ]; then
+    echo "Creating placeholder auto-update.sh..."
+    cat > server/app/auto-update.sh << 'EOL'
+#!/usr/bin/env bash
+echo "Auto-update placeholder — implement your updater here"
+EOL
+fi
+
+# Ensure send-tunnel-url.sh exists
+if [ ! -f "server/app/send-tunnel-url.sh" ]; then
+    echo "Creating placeholder send-tunnel-url.sh..."
+    cat > server/app/send-tunnel-url.sh << 'EOL'
+#!/usr/bin/env bash
+echo "Send tunnel URL placeholder"
+EOL
+fi
+
+chmod +x server/app/auto-update.sh server/app/send-tunnel-url.sh
+
+# Move into app folder for the rest of the setup
 cd server/app
 PROJECT_DIR="$(pwd)"
 echo "Now working inside: $PROJECT_DIR"
 
 # ────────────────────────────────────────────────
-# 1. Detect OS & install missing system tools
+# 1. Detect OS & install missing tools
 # ────────────────────────────────────────────────
-
 if [[ "$OSTYPE" == "darwin"* ]]; then
     PKG_MGR="brew"
     INSTALL_CMD="brew install"
@@ -72,14 +91,12 @@ command -v cloudflared >/dev/null 2>&1 || {
 # ────────────────────────────────────────────────
 # 2. Install Node dependencies
 # ────────────────────────────────────────────────
-
 echo "Installing npm dependencies..."
 npm install
 
 # ────────────────────────────────────────────────
 # 3. Python virtual environment for Discord bots
 # ────────────────────────────────────────────────
-
 echo "Setting up Python virtual environment..."
 python3 -m venv venv-discord-bot 2>/dev/null || python -m venv venv-discord-bot || {
     echo "Python venv creation failed. Make sure python3 is installed."
@@ -99,7 +116,6 @@ deactivate
 # ────────────────────────────────────────────────
 # 4. Interactive secrets configuration (.env)
 # ────────────────────────────────────────────────
-
 echo ""
 echo "=== Configure secrets (required for bots) ==="
 echo "Press Enter to keep existing / skip value"
@@ -133,16 +149,16 @@ prompt_and_set "SMTP_HOST"             "SMTP_HOST (e.g. smtp.gmail.com)"
 prompt_and_set "SMTP_PORT"             "SMTP_PORT (e.g. 587)"
 prompt_and_set "SMTP_USER"             "SMTP_USER (your email)"
 prompt_and_set "SMTP_PASS"             "SMTP_PASS (app password)"
+prompt_and_set "AUTO_UPDATE_SCRIPT"    "Path to auto-update.sh (optional, default: ./auto-update.sh)"
 
 echo ""
 echo ".env updated!"
 
 # ────────────────────────────────────────────────
-# 5. Generate ecosystem-maavis.config.js (second PM2)
+# 5. Generate ecosystem-maavis.config.cjs (second PM2)
 # ────────────────────────────────────────────────
-
-echo "Generating ecosystem-maavis.config.cjs (CommonJS format)..."
-cat > ecosystem-maavis.config.cjs << 'EOL'
+echo "Generating ecosystem-maavis.config.cjs..."
+cat > ecosystem-maavis.config.cjs << EOL
 module.exports = {
   apps: [
     {
@@ -174,13 +190,11 @@ module.exports = {
 };
 EOL
 
-# Make helper scripts executable
 chmod +x auto-update.sh send-tunnel-url.sh 2>/dev/null || true
 
 # ────────────────────────────────────────────────
 # 6. Start Discord bots in default PM2
 # ────────────────────────────────────────────────
-
 echo "Starting Discord bots in default PM2..."
 pm2 delete main-bot 2>/dev/null || true
 pm2 delete backup-bot 2>/dev/null || true
@@ -190,21 +204,24 @@ pm2 start venv-discord-bot/bin/python --name backup-bot -- backup-bot.py
 
 pm2 save
 
+# ────────────────────────────────────────────────
+# 7. Summary / Next Steps
+# ────────────────────────────────────────────────
 echo ""
 echo "========================================"
 echo "Setup finished!"
 echo "========================================"
 echo ""
-echo "What to do next:"
-echo "  1. Use Discord command:   /maavis_start    → starts website + tunnel + updater"
-echo "  2. Check everything:      /maavis_status   → shows status + tunnel URL"
-echo "  3. View bot logs:         pm2 logs main-bot"
-echo "  4. View website logs:     pm2-maavis logs maavis-cf-tunnel"
+echo "Next steps:"
+echo "  1. Discord: /maavis_start → starts website + tunnel + updater"
+echo "  2. Discord: /maavis_status → shows status + tunnel URL"
+echo "  3. View bot logs: pm2 logs main-bot"
+echo "  4. View website logs: pm2-maavis logs maavis-cf-tunnel"
 echo ""
-echo "Useful alias (add to ~/.zshrc or ~/.bashrc):"
+echo "Useful alias:"
 echo "  alias pm2-maavis='PM2_HOME=~/.pm2-maavis pm2'"
 echo ""
-echo "To re-run setup or re-configure secrets:"
+echo "Re-run setup or re-configure secrets:"
 echo "  ./setup-server.sh"
 echo ""
 echo "Enjoy MAAVIS TALENT HUB!"
