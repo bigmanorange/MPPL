@@ -33,9 +33,8 @@ ECOSYSTEM_FILE = os.getenv(
 )
 AUTO_UPDATE_SCRIPT = os.getenv(
     "AUTO_UPDATE_SCRIPT",
-    Path(REPO_ROOT) / "server" / "app" / "auto-update.sh"
+    Path(os.getenv("AUTO_UPDATE_SCRIPT", "./server/app/auto-update.sh"))
 )
-
 # Ensure we are in the project root
 os.chdir(REPO_ROOT)
 
