@@ -176,6 +176,7 @@ module.exports = {
       args: 'tunnel --url http://localhost:3000',
       cwd: __dirname,
       autorestart: true,
+      maxrestart:1,
       watch: false
     },
     {
