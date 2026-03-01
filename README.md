@@ -1,31 +1,25 @@
-
----
-
 # MAAVIS TALENT HUB
 
-Welcome to **MAAVIS TALENT HUB**.  
-This project is designed to streamline the process of connecting talents with job opportunities efficiently.
+Modern platform connecting talents with job opportunities.  
+Features interactive UI, real-time updates, Discord bot integration, Cloudflare quick tunnel, auto-updater, and remote control via Discord.
 
----
+## Key Features
+- **Website**: Vite + TypeScript frontend + Node/TS backend (`server.ts`)
+- **Discord Bots**:
+  - `main-bot.py`: full control over website, tunnel & updater
+  - `backup-bot.py`: restarts / checks main bot
+- **Cloudflare Quick Tunnel** → public URL without port forwarding
+- **Auto-updater** (`auto-update.sh`) – keeps code fresh
+- **Two isolated PM2 instances**:
+  - Default PM2 → Discord bots only
+  - Second PM2 (`~/.pm2-maavis`) → website + tunnel + updater (lazy start via Discord)
+- **Secure setup**: interactive prompts for all secrets (no hard-coded tokens)
 
-## Badges
-
-![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
-![License](https://img.shields.io/badge/license-MIT-green.svg)
-
----
-
-## Features
-
-- **User-friendly Interface**  
-- **Interactive Widgets**  
-- **Real-time Updates**  
-- **Automated Setup Script**
-
----
-
-## One-Command Install (Recommended)
+## One-Command Install (macOS / Linux)
 
 ```bash
-curl -O https://raw.githubusercontent.com/maahirvirsingh123-ctrl/MPPLtesting/main/setup.py
-python3 setup.py
+# Recommended: clean clone
+git clone https://github.com/maahirvirsingh123-ctrl/MPPLtesting.git
+cd MPPLtesting
+chmod +x setup-server.sh
+./setup-server.sh
