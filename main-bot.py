@@ -1,9 +1,14 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
+from dotenv import load_dotenv
 import os
 
-TOKEN = "YOUR_BOT_TOKEN"
+load_dotenv()  # Load environment variables from .env
+
+# Replace your previous TOKEN line with:
+TOKEN = os.getenv("DISCORD_TOKEN")  # main-bot.py
+
 CLOUDFLARE_LOG = "/Users/macbookpro/.pm2/logs/cf-tunnel-out.log"
 
 intents = discord.Intents.default()
