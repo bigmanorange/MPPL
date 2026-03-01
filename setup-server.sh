@@ -165,7 +165,7 @@ module.exports = {
       name: 'maavis-website',
       script: 'npm',
       args: 'run dev',
-      cwd: process.cwd(),
+      cwd: __dirname,
       env: { NODE_ENV: 'development', PORT: 3000 },
       autorestart: true,
       watch: false
@@ -174,7 +174,7 @@ module.exports = {
       name: 'maavis-cf-tunnel',
       script: 'cloudflared',
       args: 'tunnel --url http://localhost:3000',
-      cwd: process.cwd(),
+      cwd: __dirname,
       autorestart: true,
       watch: false
     },
