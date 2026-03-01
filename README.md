@@ -24,10 +24,6 @@ This project is designed to streamline the process of connecting talents with jo
 
 ---
 
-# MAAVIS TALENT HUB
-
-Streamline connecting talents with job opportunities. User-friendly interface, interactive widgets, real-time updates, Discord bot control, Cloudflare quick tunnel exposure, and auto-updates.
-
 ## One-Command Install (Recommended)
 
 ```bash
