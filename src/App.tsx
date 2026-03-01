@@ -682,7 +682,7 @@ export default function App() {
   }, [view, selectedTest]);
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] font-sans selection:bg-amber-100">
+    <div className="app-shell min-h-screen bg-[#F8FAFC] text-[#0F172A] font-sans selection:bg-amber-100">
       <AnimatePresence mode="wait">
         {view === 'login' && (
           <motion.div 
