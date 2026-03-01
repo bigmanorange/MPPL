@@ -21,6 +21,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 
 def is_owner(interaction: discord.Interaction) -> bool:
+    """Return True when the interaction user is allowed to run backup-bot commands."""
     if OWNER_ID == 0:
         return True
     return interaction.user.id == OWNER_ID
@@ -28,6 +29,7 @@ def is_owner(interaction: discord.Interaction) -> bool:
 
 @bot.event
 async def on_ready():
+    """Sync backup-bot slash commands and log connection details at startup."""
     print(f"Backup bot online: {bot.user} (ID: {bot.user.id})")
 
     try:
@@ -45,6 +47,7 @@ async def on_ready():
 
 @bot.tree.command(name="fix", description="Restart the main bot")
 async def fix(interaction: discord.Interaction):
+    """Restart the primary main-bot PM2 process after permission validation."""
     if not is_owner(interaction):
         await interaction.response.send_message("You don't have permission.", ephemeral=True)
         return
@@ -70,6 +73,7 @@ async def fix(interaction: discord.Interaction):
 
 @bot.tree.command(name="status", description="Check if the main bot is online")
 async def status(interaction: discord.Interaction):
+    """Check PM2 for the main bot process and report its runtime status."""
     if not is_owner(interaction):
         await interaction.response.send_message("You don't have permission.", ephemeral=True)
         return
