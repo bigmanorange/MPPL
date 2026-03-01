@@ -1,8 +1,13 @@
 import discord
 from discord.ext import commands
 import subprocess
+from dotenv import load_dotenv
+import os
 
-TOKEN = "BACKUP_BOT_TOKEN"
+load_dotenv()  # loads .env
+
+# backup-bot.py
+TOKEN = os.getenv("BACKUP_TOKEN")
 
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
