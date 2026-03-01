@@ -3,6 +3,7 @@ from discord.ext import commands
 import subprocess
 from dotenv import load_dotenv
 import os
+from discord import app_commands
 
 load_dotenv()  # loads .env
 
