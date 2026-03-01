@@ -16,7 +16,7 @@ from discord.ext import commands
 from dotenv import load_dotenv
 
 load_dotenv()
-
+# assumes bot is in server/app
 # ────────────────────────────────────────────────
 # Config
 # ────────────────────────────────────────────────
@@ -30,7 +30,7 @@ PM2_SECOND_CMD = f'PM2_HOME={SECOND_PM2_HOME} pm2'
 ECOSYSTEM_FILE = "ecosystem-maavis.config.js"               # relative to PROJECT_DIR
 
 # IMPORTANT: Update this to your actual folder path
-PROJECT_DIR = "/Users/macbookpro/MPPLtesting"               # ← change if on different machine
+PROJECT_DIR = "/Users/macbookpro/MPPLtesting/server/app"               # ← change if on different machine
 
 # ────────────────────────────────────────────────
 # Helper: Execute PM2 on the SECOND instance only
