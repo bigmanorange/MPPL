@@ -1,31 +1,46 @@
-#!/bin/zsh
-APP_DIR="$HOME/server/app"
-cd "$APP_DIR" || { echo "❌ Could not cd to $APP_DIR"; exit 1; }
+#!/bin/bash
 
-echo "✅ Auto-Update Watcher Started in $APP_DIR"
+# ================= CONFIG =================
+REPO_DIR="/Users/macbookpro/server/app"
+BRANCH="main"
+PM2_PROCESS_NAME="website"
+SLEEP_TIME=60   # seconds between updates
+# =========================================
 
 while true; do
-  # Ensure git repo
-  if [ ! -d ".git" ]; then
-    echo "❌ Not a git repository. Re-cloning..."
-    cd ~
-    rm -rf "$APP_DIR"
-    git clone https://github.com/maahirvirsingh123-ctrl/MPPLtesting.git "$APP_DIR"
-    cd "$APP_DIR"
-  fi
-  git fetch origin main
-  git reset --hard origin/main
-  git clean -fd
-  LOCAL=$(git rev-parse HEAD)
-  REMOTE=$(git rev-parse origin/main)
+    echo "🚀 Starting update at $(date)..."
 
-  if [ "$LOCAL" != "$REMOTE" ]; then
-    echo "🚀 New update! Pulling..."
-    git pull origin main
-    npm install
-    pm2 restart maavis-hub
+    cd "$REPO_DIR" || {
+        echo "❌ Failed to enter repo directory"
+        sleep $SLEEP_TIME
+        continue
+    }
+
+    echo "📥 Fetching latest code..."
+    git fetch origin "$BRANCH"
+
+    echo "🔄 Resetting to origin/$BRANCH..."
+    git reset --hard "origin/$BRANCH"
+
+    echo "🧹 Cleaning untracked files..."
+    git clean -fd
+
+    # Install npm dependencies if package.json exists
+    if [ -f "package.json" ]; then
+        echo "📦 Installing npm dependencies..."
+        npm install
+    fi
+
+    # Install Python dependencies if requirements.txt exists
+    if [ -f "requirements.txt" ]; then
+        echo "🐍 Installing Python dependencies..."
+        pip install -r requirements.txt
+    fi
+
+    echo "♻ Restarting website process..."
+    pm2 restart "$PM2_PROCESS_NAME"
+
     echo "✅ Update applied at $(date)"
-  fi
-
-  sleep 60
+    echo "⏳ Sleeping for $SLEEP_TIME seconds..."
+    sleep $SLEEP_TIME
 done
