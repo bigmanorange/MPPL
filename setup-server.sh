@@ -138,24 +138,40 @@ module.exports = {
       script: "npm",
       args: "run dev",
       cwd: __dirname,
+
       autorestart: true,
-      restart_delay: 5000
+      restart_delay: 5000,     // wait 5s before restart
+      max_restarts: 20,
+      min_uptime: "10s",
+
+      env: {
+        NODE_ENV: "development",
+        PORT: 3000
+      }
     },
+
     {
-      name: "maavis-tunnel",
+      name: "maavis-ngrok",
       script: "ngrok",
-      args: `http ${process.env.NGROK_PORT || 3000}`,
+      args: "http 3000",
       cwd: __dirname,
+
       autorestart: true,
-      restart_delay: 5000
+      restart_delay: 8000,     // ngrok needs longer cooldown
+      max_restarts: 15,
+      min_uptime: "15s"
     },
+
     {
       name: "maavis-updater",
       script: "./auto-update.sh",
       interpreter: "/bin/bash",
       cwd: __dirname,
+
       autorestart: true,
-      restart_delay: 5000
+      restart_delay: 15000,    // updater should NEVER spam restarts
+      max_restarts: 10,
+      min_uptime: "20s"
     }
   ]
 };
