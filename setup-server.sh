@@ -138,7 +138,8 @@ module.exports = {
       script: "npm",
       args: "run dev",
       cwd: __dirname,
-      autorestart: true
+      autorestart: true,
+      restart_delay: 5000
     },
     {
       name: "maavis-tunnel",
@@ -153,7 +154,8 @@ module.exports = {
       script: "./auto-update.sh",
       interpreter: "/bin/bash",
       cwd: __dirname,
-      autorestart: true
+      autorestart: true,
+      restart_delay: 5000
     }
   ]
 };
