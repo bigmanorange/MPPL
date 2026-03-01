@@ -24,90 +24,12 @@ This project is designed to streamline the process of connecting talents with jo
 
 ---
 
-## Quick Setup (Recommended)
+# MAAVIS TALENT HUB
 
-You only need the `setup-server.sh` file.
+Streamline connecting talents with job opportunities. User-friendly interface, interactive widgets, real-time updates, Discord bot control, Cloudflare quick tunnel exposure, and auto-updates.
 
-### 1. Download the Script
-
-Download `setup-server.sh` from this repository.
-
-Or use curl:
+## One-Command Install (Recommended)
 
 ```bash
-curl -O https://raw.githubusercontent.com/maahirvirsingh123-ctrl/MPPLtesting/main/setup-server.sh
-````
-
----
-
-### 2. Make It Executable
-
-```bash
-chmod +x setup-server.sh
-```
-
----
-
-### 3. Run the Script
-
-```bash
-./setup-server.sh
-```
-
-The script will:
-
-- Install required dependencies
-    
-- Configure the environment
-    
-- Start the development server automatically
-    
-
-
----
-
-## Manual Setup (Optional)
-
-If you prefer to run it manually:
-
-```bash
-npm install
-npm start
-```
-
----
-
-## Requirements
-
-- macOS / Linux
-    
-- Node.js installed
-    
-- Internet connection (for dependency installation)
-    
-
----
-
-## Troubleshooting
-
-### Permission Denied
-
-```bash
-chmod +x setup-server.sh
-```
-
-### macOS Security Warning
-
-```bash
-xattr -d com.apple.quarantine setup-server.sh
-```
-
----
-
-## License
-
-MIT License
-
----
-
-**MAAVIS TALENT HUB — Simplifying Talent Connections**
+curl -O https://raw.githubusercontent.com/maahirvirsingh123-ctrl/MPPLtesting/main/setup.py
+python3 setup.py
