@@ -9,7 +9,7 @@ export default defineConfig({
     port: 5173,
 
     // allow ngrok domains
-    allowedHosts: "all",
+    allowedHosts: "georgetta-renascent-doubly.ngrok-free.dev",
 
     // THIS FIXES YOUR CONNECTION ERROR
     proxy: {
