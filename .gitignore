@@ -1,11 +1,8 @@
-node_modules/
-build/
-dist/
-coverage/
-.DS_Store
-*.log
-.env*
-!.env.example
-*.db
-*.sqlite
+# Secrets & generated files
+.env
 ecosystem-maavis.config.js
+cloudflared.log
+data/
+venv-discord-bot/
+node_modules/
+dist/
