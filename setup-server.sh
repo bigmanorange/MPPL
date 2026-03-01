@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # setup-server.sh
-# Portable one-command setup for MAAVIS TALENT HUB
-# Features: interactive secrets prompt, two separate PM2 instances, no hard-coded paths
+# MAAVIS TALENT HUB — Portable Setup (NGROK VERSION)
 
 set -e
 
@@ -21,113 +20,81 @@ if [ ! -d "server/app" ]; then
     mkdir -p server/app server/data
 fi
 
-# Move all project files (except setup script) into server/app
 shopt -s extglob dotglob nullglob
 mv !(setup-server.sh) server/app/ 2>/dev/null || true
 
-# Ensure auto-update.sh exists
-if [ ! -f "server/app/auto-update.sh" ]; then
-    echo "Creating placeholder auto-update.sh..."
-    cat > server/app/auto-update.sh << 'EOL'
-#!/usr/bin/env bash
-echo "Auto-update placeholder — implement your updater here"
-EOL
-fi
-
-# Ensure send-tunnel-url.sh exists
-if [ ! -f "server/app/send-tunnel-url.sh" ]; then
-    echo "Creating placeholder send-tunnel-url.sh..."
-    cat > server/app/send-tunnel-url.sh << 'EOL'
-#!/usr/bin/env bash
-echo "Send tunnel URL placeholder"
-EOL
-fi
-
-chmod +x server/app/auto-update.sh server/app/send-tunnel-url.sh
-
-# Move into app folder for the rest of the setup
 cd server/app
 PROJECT_DIR="$(pwd)"
 echo "Now working inside: $PROJECT_DIR"
 
 # ────────────────────────────────────────────────
-# 1. Detect OS & install missing tools
+# 1. Detect OS & install tools
 # ────────────────────────────────────────────────
 if [[ "$OSTYPE" == "darwin"* ]]; then
-    PKG_MGR="brew"
     INSTALL_CMD="brew install"
 else
-    PKG_MGR="apt"
     INSTALL_CMD="sudo apt update && sudo apt install -y"
 fi
 
-command -v node >/dev/null 2>&1 || {
-    echo "Node.js not found → installing..."
-    if [ "$PKG_MGR" = "brew" ]; then
-        $INSTALL_CMD node
-    else
-        $INSTALL_CMD nodejs npm
-    fi
+command -v node >/dev/null || {
+    echo "Installing Node..."
+    $INSTALL_CMD node
 }
 
-command -v pm2 >/dev/null 2>&1 || {
-    echo "PM2 not found → installing globally..."
+command -v pm2 >/dev/null || {
+    echo "Installing PM2..."
     sudo npm install -g pm2
 }
 
-command -v cloudflared >/dev/null 2>&1 || {
-    echo "cloudflared not found → installing..."
-    if [ "$PKG_MGR" = "brew" ]; then
-        $INSTALL_CMD cloudflared
+# ✅ INSTALL NGROK (replaces cloudflared)
+command -v ngrok >/dev/null || {
+    echo "Installing ngrok..."
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        brew install ngrok/ngrok/ngrok
     else
-        $INSTALL_CMD cloudflared || {
-            echo "cloudflared install failed. Install manually:"
-            echo "https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/install-and-setup/tunnel-guide/local/"
-            exit 1
-        }
+        curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc \
+          | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
+        echo "deb https://ngrok-agent.s3.amazonaws.com buster main" \
+          | sudo tee /etc/apt/sources.list.d/ngrok.list
+        sudo apt update
+        sudo apt install ngrok
     fi
 }
 
 # ────────────────────────────────────────────────
-# 2. Install Node dependencies
+# 2. Install Node deps
 # ────────────────────────────────────────────────
 echo "Installing npm dependencies..."
 npm install
 
 # ────────────────────────────────────────────────
-# 3. Python virtual environment for Discord bots
+# 3. Python venv
 # ────────────────────────────────────────────────
 echo "Setting up Python virtual environment..."
-python3 -m venv venv-discord-bot 2>/dev/null || python -m venv venv-discord-bot || {
-    echo "Python venv creation failed. Make sure python3 is installed."
-    exit 1
-}
+
+python3 -m venv venv-discord-bot 2>/dev/null || python -m venv venv-discord-bot
 
 source venv-discord-bot/bin/activate
 pip install --upgrade pip
-if [ -f "requirements.txt" ]; then
+
+if [ -f requirements.txt ]; then
     pip install -r requirements.txt
 else
-    echo "No requirements.txt found → installing basic deps"
-    pip install discord.py python-dotenv
+    pip install discord.py python-dotenv requests
 fi
+
 deactivate
 
 # ────────────────────────────────────────────────
-# 4. Interactive secrets configuration (.env)
+# 4. Interactive .env setup
 # ────────────────────────────────────────────────
 echo ""
-echo "=== Configure secrets (required for bots) ==="
-echo "Press Enter to keep existing / skip value"
+echo "=== Configure secrets ==="
 
-if [ -f ".env" ]; then
-    source .env
-    echo "(Existing .env found — you can keep current values)"
-else
-    touch .env
-fi
+[ -f ".env" ] || touch .env
+source .env || true
 
-prompt_and_set() {
+prompt_and_set () {
     local var="$1"
     local msg="$2"
     local current="${!var:-empty}"
@@ -141,62 +108,62 @@ prompt_and_set() {
     fi
 }
 
-prompt_and_set "DISCORD_TOKEN_MAIN"    "DISCORD_TOKEN_MAIN (main bot token)"
-prompt_and_set "DISCORD_GUILD_ID"      "DISCORD_GUILD_ID (your server ID)"
-prompt_and_set "DISCORD_OWNER_ID"      "DISCORD_OWNER_ID (your Discord user ID)"
-prompt_and_set "BACKUP_TOKEN"          "BACKUP_TOKEN (backup bot — optional)"
-prompt_and_set "SMTP_HOST"             "SMTP_HOST (e.g. smtp.gmail.com)"
-prompt_and_set "SMTP_PORT"             "SMTP_PORT (e.g. 587)"
-prompt_and_set "SMTP_USER"             "SMTP_USER (your email)"
-prompt_and_set "SMTP_PASS"             "SMTP_PASS (app password)"
-prompt_and_set "AUTO_UPDATE_SCRIPT"    "Path to auto-update.sh (optional, default: ./auto-update.sh)"
+prompt_and_set "DISCORD_TOKEN_MAIN" "DISCORD_TOKEN_MAIN"
+prompt_and_set "DISCORD_GUILD_ID"   "DISCORD_GUILD_ID"
+prompt_and_set "DISCORD_OWNER_ID"   "DISCORD_OWNER_ID"
+prompt_and_set "BACKUP_TOKEN"       "BACKUP_TOKEN (optional)"
 
-echo ""
+# ✅ NEW ENV FOR NGROK
+prompt_and_set "NGROK_AUTHTOKEN" "NGROK_AUTHTOKEN (from dashboard.ngrok.com)"
+prompt_and_set "NGROK_PORT"      "NGROK_PORT (default 3000)"
+
+# Configure ngrok auth automatically
+if grep -q NGROK_AUTHTOKEN .env; then
+    source .env
+    ngrok config add-authtoken "$NGROK_AUTHTOKEN"
+fi
+
 echo ".env updated!"
 
 # ────────────────────────────────────────────────
-# 5. Generate ecosystem-maavis.config.cjs (second PM2)
+# 5. Generate ecosystem (NGROK)
 # ────────────────────────────────────────────────
 echo "Generating ecosystem-maavis.config.cjs..."
-cat > ecosystem-maavis.config.cjs << EOL
+
+cat > ecosystem-maavis.config.cjs << 'EOL'
 module.exports = {
   apps: [
     {
-      name: 'maavis-website',
-      script: 'npm',
-      args: 'run dev',
+      name: "maavis-website",
+      script: "npm",
+      args: "run dev",
       cwd: __dirname,
-      env: { NODE_ENV: 'development', PORT: 3000 },
-      autorestart: true,
-      watch: false
+      autorestart: true
     },
     {
-      name: 'maavis-cf-tunnel',
-      script: 'cloudflared',
-      args: 'tunnel --url http://localhost:3000',
+      name: "maavis-tunnel",
+      script: "ngrok",
+      args: `http ${process.env.NGROK_PORT || 3000}`,
       cwd: __dirname,
       autorestart: true,
-      maxrestart:1,
-      watch: false
+      restart_delay: 5000
     },
     {
-      name: 'maavis-updater',
-      script: './auto-update.sh',
-      interpreter: '/bin/bash',
+      name: "maavis-updater",
+      script: "./auto-update.sh",
+      interpreter: "/bin/bash",
       cwd: __dirname,
-      autorestart: true,
-      watch: false
+      autorestart: true
     }
   ]
 };
 EOL
 
-chmod +x auto-update.sh send-tunnel-url.sh 2>/dev/null || true
+# ────────────────────────────────────────────────
+# 6. Start Discord bots (default PM2)
+# ────────────────────────────────────────────────
+echo "Starting Discord bots..."
 
-# ────────────────────────────────────────────────
-# 6. Start Discord bots in default PM2
-# ────────────────────────────────────────────────
-echo "Starting Discord bots in default PM2..."
 pm2 delete main-bot 2>/dev/null || true
 pm2 delete backup-bot 2>/dev/null || true
 
@@ -205,24 +172,15 @@ pm2 start venv-discord-bot/bin/python --name backup-bot -- backup-bot.py
 
 pm2 save
 
-# ────────────────────────────────────────────────
-# 7. Summary / Next Steps
-# ────────────────────────────────────────────────
 echo ""
 echo "========================================"
-echo "Setup finished!"
+echo "SETUP COMPLETE"
 echo "========================================"
 echo ""
-echo "Next steps:"
-echo "  1. Discord: /maavis_start → starts website + tunnel + updater"
-echo "  2. Discord: /maavis_status → shows status + tunnel URL"
-echo "  3. View bot logs: pm2 logs main-bot"
-echo "  4. View website logs: pm2-maavis logs maavis-cf-tunnel"
+echo "Run in Discord:"
+echo "  /maavis_start"
+echo "  /maavis_status"
 echo ""
-echo "Useful alias:"
-echo "  alias pm2-maavis='PM2_HOME=~/.pm2-maavis pm2'"
+echo "View logs:"
+echo "  pm2 logs main-bot"
 echo ""
-echo "Re-run setup or re-configure secrets:"
-echo "  ./setup-server.sh"
-echo ""
-echo "Enjoy MAAVIS TALENT HUB!"
