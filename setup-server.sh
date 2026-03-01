@@ -141,20 +141,18 @@ echo ".env updated!"
 # 5. Generate ecosystem-maavis.config.js (second PM2)
 # ────────────────────────────────────────────────
 
-echo "Generating ecosystem-maavis.config.js (dynamic paths)..."
-cat > ecosystem-maavis.config.js << 'EOL'
+echo "Generating ecosystem-maavis.config.cjs (CommonJS format)..."
+cat > ecosystem-maavis.config.cjs << 'EOL'
 module.exports = {
   apps: [
     {
       name: 'maavis-website',
       script: 'npm',
-      args: 'run dev',  // ← change to 'run build && node dist/server.js' for production
+      args: 'run dev',
       cwd: process.cwd(),
       env: { NODE_ENV: 'development', PORT: 3000 },
       autorestart: true,
-      watch: false,
-      max_restarts: 10,
-      restart_delay: 4000
+      watch: false
     },
     {
       name: 'maavis-cf-tunnel',
@@ -162,9 +160,7 @@ module.exports = {
       args: 'tunnel --url http://localhost:3000',
       cwd: process.cwd(),
       autorestart: true,
-      watch: false,
-      max_restarts: 10,
-      restart_delay: 1000
+      watch: false
     },
     {
       name: 'maavis-updater',
@@ -172,9 +168,7 @@ module.exports = {
       interpreter: '/bin/bash',
       cwd: process.cwd(),
       autorestart: true,
-      watch: false,
-      max_restarts: 5,
-      restart_delay: 60000
+      watch: false
     }
   ]
 };
